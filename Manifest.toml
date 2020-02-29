@@ -9,7 +9,7 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[Handles]]
 deps = ["Test"]
-path = "../Handles"
+git-tree-sha1 = "ba104945d589c950992b08a84f013c36417e523d"
 uuid = "94972ede-0d5b-11e9-1425-55c861492980"
 version = "0.1.0"
 
@@ -46,10 +46,10 @@ deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[StaticArrays]]
-deps = ["InteractiveUtils", "LinearAlgebra", "Random", "Statistics", "Test"]
-git-tree-sha1 = "1eb114d6e23a817cd3e99abc3226190876d7c898"
+deps = ["LinearAlgebra", "Random", "Statistics"]
+git-tree-sha1 = "5a3bcb6233adabde68ebc97be66e95dcb787424c"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "0.10.2"
+version = "0.12.1"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]

@@ -75,7 +75,7 @@ end
 
 @testset "box48" begin
   he_ = HalfEdges
-  f = open(string(Base.@__DIR__, "/../../resource/mesh/box48.spork"), "r")
+  f = open(string(Base.@__DIR__, "/box48.spork"), "r")
   mesh = deserialize(f)
   close(f)
 
