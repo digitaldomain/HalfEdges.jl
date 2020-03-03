@@ -29,10 +29,27 @@ using StaticArrays
 
 ∂(f::Function, y...) = (z...)->f(y...,z...)
 second(c) = c[2]
+he_ = HalfEdges
 
 @testset "one tri" begin
   topo = HalfEdges.Topology([[1,2,3]], 3)
   @test 1 == 1  # just make sure it didn't fail out
+  @test tail(topo, vertices(topo)[1])  == VertexHandle(1)
+  @test he_.mapedge( i->i, topo)[1] == edges(topo)[1]
+  @test he_.vertex_indices(topo) == 1:nverts(topo)
+  @test he_.face_indices(topo) == 1:nfaces(topo)
+
+  P = [[0.0,0.0,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0]]
+  @test he_.circumcenter_triangle(topo, P, HalfEdgeHandle(topo, VertexHandle(1))) == [0.5,0.5,0.0]
+  @test facelist(topo) == [[1,2,3]]
+  @test sort(he_.angles(topo, P, Polygon(topo, 1))) ≈ [π/4, π/4, π/2]
+
+  # HalfEdgeHandle for vertex 3 is the most counterclockwise handle with 3 as it's tail
+  @test isboundary(topo, vertices(topo)[3])
+  @test edge(topo, vertices(topo)[3]) == (VertexHandle(3), VertexHandle(2))
+  @test he_.angle(topo, P, vertices(topo)[3]) ≈ π/2
+  @test he_.edgehandle(topo, first(UniqueHalfEdges(topo))) ==
+            he_.edgehandle(topo, opposite(topo, first(UniqueHalfEdges(topo))))
 end
 
 
@@ -61,20 +78,34 @@ end
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[1]] == map(sort, edges(topo, FaceHandle(1)))
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[2]] == map(sort, edges(topo, FaceHandle(2)))
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[3]] == map(sort, edges(topo, FaceHandle(3)))
+  @test map(heh->edge(topo,heh), IncidentHalfEdges(topo, FaceHandle)[3]) == map(sort, edges(topo, FaceHandle(3)))
 end
 
 
 @testset "unbroken ring" begin
   topo = Topology([[1,2,3],[1,3,4],[1,4,2]],4)
+  P = [[0.0,0.0,0.0],[1.0,-0.25,0.0],[0.0,1.0,0.0],[-1.0,-0.25,0.0]]
 
   @test length(collect(HalfEdges.OneRing(topo,VertexHandle(1)))) == 3
   @test length(collect(HalfEdges.OneRing(topo,VertexHandle(4)))) == 3
   @test reduce( (acc,iv)->acc && iv == VertexHandle(1), [HalfEdges.tail(topo,ih) for ih in HalfEdges.OneRing(topo,VertexHandle(1))][1:end], init=true)
   @test nhalfedges(topo) == length(edges(topo))*2
+
+  FE = he_.incidence(topo, EdgeHandle, FaceHandle,true)
+  EV = he_.incidence(topo, VertexHandle, EdgeHandle,true)
+  @test iszero(FE*EV) 
+end
+
+@testset "3x3grid" begin
+  cell(i,j) = map(v->v+(j-1)*4, [i,i+4,i+1,i+1,i+4,i+5])
+  topo = Topology(Iterators.flatten([cell(1,1), cell(2,1), cell(3,1), 
+                                     cell(1,2), cell(2,2), cell(3,2), 
+                                     cell(1,3), cell(2,3), cell(3,3)])|>collect)
+  @test sort(he_.boundary_interior(topo)) == [6,7,10,11]
+
 end
 
 @testset "box48" begin
-  he_ = HalfEdges
   f = open(string(Base.@__DIR__, "/box48.spork"), "r")
   mesh = deserialize(f)
   close(f)
@@ -93,6 +124,10 @@ end
 
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[1]] == map(sort, edges(topo, FaceHandle(1)))
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[2]] == map(sort, edges(topo, FaceHandle(2)))
+
+  # not really working so well, but we will test it anyways
+  P = [[0.25,0.25,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0], [0.75, 0.75,0.0]]
+  @test he_.improve_mesh(topo, P) > 0
 end
 
 @testset "readme" begin

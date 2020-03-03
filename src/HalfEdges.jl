@@ -39,6 +39,7 @@ export
   IncidentEdges,
   IncidentHalfEdges,
   nvertices,
+  nverts,
   nedges,
   nfaces,
   nhalfedges,
@@ -46,7 +47,9 @@ export
   incidence,
   loadmesh,
   head,
-  tail
+  tail,
+  isboundary,
+  opposite
 
 partial = (f::Function,y...)->(z...)->f(y...,z...)
 ∂(f::Function,y...) = partial(f,y...)
@@ -80,6 +83,7 @@ struct Topology
   v2he    :: Vector{HalfEdgeHandle}
   face2he :: Vector{HalfEdgeHandle}
   he      :: Vector{HalfEdge}
+  he2edge :: Vector{EdgeHandle}
 end
 
 const Mesh = Tuple{Topology, Vector{Vector3d}}
@@ -91,12 +95,10 @@ halfedge(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 get(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 
 HalfEdgeHandle(topo::Topology, vh::VertexHandle) = topo.v2he[vh]
-halfedgehandle(topo::Topology, vh::VertexHandle)  = HalfEdgeHandle(topo, vh)
 
 """ return the VertexHandle for the vert pointed to by the given halfedge """
 head(he::HalfEdge) = he.head
 head(topo::Topology, heh::HalfEdgeHandle) = head(topo.he[heh])
-head(topo::Topology, heh::Nothing) = nothing
 
 """ return the VertexHandle for the vert pointed to by the given halfedge """
 vertex(x::HalfEdge) = head(x)
@@ -111,7 +113,6 @@ verts(x...) = vertices(x...)
 """ return the VertexHandle for the vert at the tail of the given halfedge """
 tail(topo::Topology, he::HalfEdge) = head(topo,opposite(he))
 tail(topo::Topology, heh::HalfEdgeHandle) = tail(topo,topo.he[heh])
-tail(topo::Topology, heh::Nothing) = nothing
 
 """ return the next halfedge ccw on the same face """
 function next(he::HalfEdge) 
@@ -122,8 +123,6 @@ function next(topo::Topology, heh::HalfEdgeHandle)
   next(topo.he[heh])
 end
 
-next(topo::Topology, heh::Nothing) =  nothing
-
 """ return halfedge pointing to this halfedge """
 function prev(topo::Topology, heh::HalfEdgeHandle) 
   if isboundary(topo, heh)
@@ -133,17 +132,27 @@ function prev(topo::Topology, heh::HalfEdgeHandle)
   end
 end
 
-prev(topo::Topology, heh::Nothing) =  nothing
-
 function opposite(he::HalfEdge) 
   he.opposite 
 end
 
+"""
+    opposite(topo, halfedgehandle)
+
+the Handle of the oppositely oriented halfedge sharing the same topological edge.   
+
+
+        b
+       /|\\
+      /↑|↓\\ 
+     / ↑|↓ \\
+    ∘---a---∘
+
+ ↑ and ↓ are opposite halfedges on the edge ab
+"""
 function opposite(topo::Topology, heh::HalfEdgeHandle) 
   opposite(topo.he[heh])
 end
-
-opposite(topo::Topology, heh::Nothing) =  nothing
 
 "iterate around a polygon"
 struct Polygon
@@ -188,9 +197,9 @@ halfedge(topo::Topology, e::T) where {T <: Tuple{VertexHandle, VertexHandle}} =
 halfedge(topo::Topology, e::T) where {V<:Integer, T<:Tuple{V,V}} = halfedge(topo, VertexHandle.(e))
 
 edge(topo::Topology, heh::HalfEdgeHandle) =  (tail(topo,heh), head(topo,heh))
-edge(topo::Topology, heh::Nothing) =  nothing
 "get an edge tuple from an EdgeHandle.  very slow"
 edge(topo::Topology, eh::EdgeHandle) = edges(topo)[eh]
+edgehandle(topo::Topology, heh::HalfEdgeHandle) = topo.he2edge[heh]
 
 
 edges(topo::Topology) = Iterators.filter(ab->isless(ab...), Iterators.map(heh->edge(topo,heh),halfedges(topo))) |> collect
@@ -354,7 +363,8 @@ function Topology( poly::Vector{Vector{T}}, nVert::T; handle_bad_geo = true ) wh
   end
 
   boundary_he = Vector{HalfEdge}(undef,0)
-  prototopo = Topology(topo_v2he, topo_face2he, topo_he)
+  topo_he2edge = Vector{EdgeHandle}(undef,0)
+  prototopo = Topology(topo_v2he, topo_face2he, topo_he, topo_he2edge)
   topo_he = 
     map( zip(topo_he, 1:length(topo_he)) ) do (he,hehi) 
       headvert = head(he)
@@ -371,7 +381,7 @@ function Topology( poly::Vector{Vector{T}}, nVert::T; handle_bad_geo = true ) wh
       end
     end
 
-  prototopo = Topology(topo_v2he, topo_face2he, vcat(topo_he, boundary_he))
+  prototopo = Topology(topo_v2he, topo_face2he, vcat(topo_he, boundary_he), topo_he2edge)
 
   # iterate over boundaries.  set vertex map so boundary vertex tail is boundary he tail
   for i in 1:length(boundary_he)
@@ -391,8 +401,16 @@ function Topology( poly::Vector{Vector{T}}, nVert::T; handle_bad_geo = true ) wh
       HalfEdge( head(b_he), topo_v2he[head(b_he)] ,opposite(b_he), nothing )
     end
 
+  prototopo = Topology(topo_v2he, topo_face2he, vcat(topo_he, boundary_he), topo_he2edge)
 
-  Topology(topo_v2he, topo_face2he, vcat(topo_he, boundary_he))
+  # make a map to EdgeHandles as this is quite useful for interfacing with linear algebra
+  resize!(topo_he2edge, nhalfedges(prototopo))
+  for (eh, hh) in enumerate(UniqueHalfEdges(prototopo))
+    topo_he2edge[hh] = EdgeHandle(eh)
+    topo_he2edge[opposite(prototopo, hh)] = EdgeHandle(eh)
+  end
+
+  Topology(topo_v2he, topo_face2he, vcat(topo_he, boundary_he), topo_he2edge)
 end
 
 function Topology( tris::Vector{T}, nVert::TT ) where {T<:Integer, TT<:Integer}
@@ -548,6 +566,7 @@ Get list of incident edges as EdgeHandle[]
 Edges will be ordered correctly with winding order of face.
 """
 function IncidentEdges(topo::Topology, ::Type{FaceHandle})
+  #!me can rewrite this to using he2edge map
 
   # first place hash of edges in correctly ordered positions
   incidente = Vector{Vector{EdgeHandle}}() 
@@ -852,6 +871,7 @@ function improve_mesh(topo::Topology, P) #; smoothness=0.0)
   sum(hasflipped)
 end
 
+#==
 struct Manifold
   soup2manifold::Vector{VertexHandle}
   manifold2soup::Vector{VertexHandle}
@@ -879,10 +899,11 @@ function make_manifold( P, poly )
 
 
 end
+==#
 
 
 """
-  boundary_verts(mesh)
+  boundary_verts(topo)
 
 find loop of boundary verts
 assumes only one boundary loop exists
@@ -890,7 +911,7 @@ assumes only one boundary loop exists
 boundary_verts(mesh) = BoundaryLoop(mesh,filter(∂(isboundary, mesh),halfedges(mesh)) |> first) |> ∂(map,∂(tail,mesh))
 
 """
-  boundary_interior(mesh)
+  boundary_interior(topo)
 
 the set of vertices connected to the boundary but not part of the boundary
 assumes only one boundary loop exists
