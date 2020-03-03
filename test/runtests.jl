@@ -32,16 +32,23 @@ second(c) = c[2]
 he_ = HalfEdges
 
 @testset "one tri" begin
-  topo = HalfEdges.Topology([[1,2,3]], 3)
+  topo = HalfEdges.Topology([1,2,3])
   @test 1 == 1  # just make sure it didn't fail out
+  @test vertex(HalfEdge(topo, opposite(topo, HalfEdgeHandle(topo, VertexHandle(1))))) == 1
   @test tail(topo, vertices(topo)[1])  == VertexHandle(1)
   @test he_.mapedge( i->i, topo)[1] == edges(topo)[1]
   @test he_.vertex_indices(topo) == 1:nverts(topo)
   @test he_.face_indices(topo) == 1:nfaces(topo)
+  @test sort(vertices(topo, HalfEdgeHandle(1))) == sort(vertices(topo, FaceHandle(1)))
+  @test length(halfedges(Polygon(topo, 1))) == 3
 
   P = [[0.0,0.0,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0]]
-  @test he_.circumcenter_triangle(topo, P, HalfEdgeHandle(topo, VertexHandle(1))) == [0.5,0.5,0.0]
+  hface = opposite(topo, HalfEdgeHandle(topo, VertexHandle(1)))
+  @test isboundary(topo, hface) == false
+  @test he_.circumcenter_triangle(topo, P, hface) == [0.5,0.5,0.0]
+  @test he_.normals(topo, P) == [[0.0,0.0,1.0]]
   @test facelist(topo) == [[1,2,3]]
+  @test edge(topo, EdgeHandle(1)) == (1,2)
   @test sort(he_.angles(topo, P, Polygon(topo, 1))) ≈ [π/4, π/4, π/2]
 
   # HalfEdgeHandle for vertex 3 is the most counterclockwise handle with 3 as it's tail
@@ -50,6 +57,9 @@ he_ = HalfEdges
   @test he_.angle(topo, P, vertices(topo)[3]) ≈ π/2
   @test he_.edgehandle(topo, first(UniqueHalfEdges(topo))) ==
             he_.edgehandle(topo, opposite(topo, first(UniqueHalfEdges(topo))))
+
+  @test he_.area(topo, P, FaceHandle(1)) == 0.5
+  @test isboundary(topo, VertexHandle(1)) 
 end
 
 

@@ -90,7 +90,6 @@ const Mesh = Tuple{Topology, Vector{Vector3d}}
 const Edge = Tuple{Int,Int}
 
 HalfEdge(topo::Topology, heh::HalfEdgeHandle) = topo.he[heh]
-HalfEdge(topo::Topology, heh::Nothing) = nothing 
 halfedge(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 get(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 
@@ -184,7 +183,6 @@ end
 halfedges(topo) = HalfEdgeHandle.(1:length(topo.he))
 halfedges(poly::Polygon) = [heh for heh in poly]
 
-halfedge(topo::T, vh::VertexHandle) where T = topo.v2he[vh]
 """
     halfedge( topo, vpair )
 
@@ -249,10 +247,10 @@ isboundary(he::HalfEdge) =  he.face == nothing
 isboundary(topo::Topology, heh::HalfEdgeHandle) =  isboundary(topo.he[heh])
 isboundary(topo::Topology, heh::Nothing) =  true
 
-""" a vertex is a boundary if the opposite of it's starting halfedge is boundary """
+""" a vertex is a boundary if it's starting halfedge is boundary """
 # this assumes we always wind the halfedge to the boundary
 # safer would be to iterate over the spokes and check if any halfedge is a boundary
-isboundary(topo::T, vh::VertexHandle) where T = isboundary(topo,opposite(topo, halfedge(topo,vh)))
+isboundary(topo::T, vh::VertexHandle) where T = isboundary(topo, HalfEdgeHandle(topo, vh))
 
 faces(topo::Topology) = topo.face2he
 
