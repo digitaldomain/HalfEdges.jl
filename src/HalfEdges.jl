@@ -446,6 +446,17 @@ area(topo::Topology, P, fh::FaceHandle) = area(P, edges(topo, fh)...)
 area(topo::Topology, P, heh::HalfEdgeHandle) = area(P, edges(topo, heh)...) 
 area(topo::Topology, P, poly::Polygon) = area(topo, P, poly.starth)
 
+function circumcenter_triangle(a::T,b::T,c::T) where T
+  ac = c-a
+  ab = b-a
+  w = ab×ac
+
+  u = (w×ab)*(ac⋅ac)
+  v = (ac×w)*(ab⋅ab)
+  x = (u+v)/(2.0 * w⋅w)
+
+  x+a
+end
 
 function circumcenter_triangle(topo, P, h::HalfEdgeHandle)
   a = P[head(topo, h)]
@@ -456,16 +467,7 @@ function circumcenter_triangle(topo, P, h::HalfEdgeHandle)
   end
 
   c = P[head(topo, next(topo, next(topo, h)))]
-
-  ac = c-a
-  ab = b-a
-  w = ab×ac
-
-  u = (w×ab)*(ac⋅ac)
-  v = (ac×w)*(ab⋅ab)
-  x = (u+v)/(2.0 * w⋅w)
-
-  x+a
+  circumcenter_triangle(a,b,c)
 end
 
 function dihedral_angle(topo::Topology, P, h)
