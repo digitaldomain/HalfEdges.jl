@@ -171,3 +171,28 @@ end
 
   @test (halfedge |> next |> opposite |> next |> next |> opposite |> next |> head)(topo, (3,1)) == v6 
 end
+
+@HandleType Foo
+@HandleType Bar
+@HandleType Baz
+
+hey(x::Integer) = x+1
+hey(x::Foo) = string("foo", x)
+hey(x::Bar) = string("bar", x)
+
+@testset "Handles" begin
+  @test Foo(1) == 1
+
+  a = sort(map( f->f+1 + Foo(1), (2 .* Foo.([10:-1:-2...]))))
+  @test eltype(a) == Foo
+  @test a[1] == -2 == Foo(-2)
+  @test a[2] < a[3]
+  @test a[end] == 22
+
+  @test hey(Foo(2)) == "foo2"
+  @test hey(Bar(3)) == "bar3"
+  @test hey(Baz(4)) == 5
+
+end
+
+

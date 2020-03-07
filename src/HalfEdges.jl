@@ -51,11 +51,12 @@ export
   isboundary,
   opposite
 
+include("Handles.jl")
+
 partial = (f::Function,y...)->(z...)->f(y...,z...)
 ∂(f::Function,y...) = partial(f,y...)
 second(c) = c[2]
 
-using Handles
 @HandleType HalfEdgeHandle
 @HandleType VertexHandle
 @HandleType FaceHandle
