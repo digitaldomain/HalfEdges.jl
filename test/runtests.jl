@@ -41,6 +41,12 @@ he_ = HalfEdges
   @test he_.face_indices(topo) == 1:nfaces(topo)
   @test sort(vertices(topo, HalfEdgeHandle(1))) == sort(vertices(topo, FaceHandle(1)))
   @test length(halfedges(Polygon(topo, 1))) == 3
+  @test eltype(OneRing(topo,VertexHandle(1))) == HalfEdgeHandle
+  @test HalfEdges.verts(topo) == vertices(topo)
+  @test HalfEdges.edge_indices(topo) == 1:nedges(topo)
+
+  @test isboundary(topo, nothing)
+  @test face(topo, nothing) == nothing
 
   P = [[0.0,0.0,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0]]
   hface = opposite(topo, HalfEdgeHandle(topo, VertexHandle(1)))
@@ -135,6 +141,8 @@ end
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[1]] == map(sort, edges(topo, FaceHandle(1)))
   @test edges(topo)[IncidentEdges(topo, FaceHandle)[2]] == map(sort, edges(topo, FaceHandle(2)))
 
+  P = [[0.0,0.0,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0], [0.5, 0.5,1.0]]
+  @test sort(map(h->he_.dihedral_angle(topo, P, h), UniqueHalfEdges(topo)))[[1,end]] ≈ [0.0,π/2]
   # not really working so well, but we will test it anyways
   P = [[0.25,0.25,0.0], [1.0,0.0,0.0], [0.0,1.0,0.0], [0.75, 0.75,0.0]]
   @test he_.improve_mesh(topo, P) > 0

@@ -483,7 +483,7 @@ function dihedral_angle(topo::Topology, P, h)
   cosθ = n1⋅n2
   sinθ = (n1×n2)⋅w
 
-  atan2(sinθ, cosθ)
+  atan(sinθ, cosθ)
 end 
 
 """
