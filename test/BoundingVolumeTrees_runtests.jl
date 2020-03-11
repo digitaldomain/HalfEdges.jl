@@ -116,11 +116,13 @@ end
   hits = query(abba, AABB(Vector3(9.0,-10.0,-10.0),Vector3(20.0,10.0,10.0)))
   @test setdiff(hits, [4,5]) |> isempty
 
-  t = tree(AABBNodeData(randAABB(),1))
+  t = tree(AABBNodeData(AABB(Vector3(-1.0,-1.0,-1.0), Vector3(1.0,1.0,1.0)),1))
   t = insert(t,AABBNodeData(randAABB(),2))
   t = insert(t,AABBNodeData(randAABB(),3))
   t = insert(t,AABBNodeData(randAABB(),4))
   t = insert(t,AABBNodeData(randAABB(),5))
+  t = insert(t,AABBNodeData(AABB(Vector3(-1.0,-1.0,-1.0), Vector3(-0.9, -0.9, -0.9)),6))
+  t = insert(t,AABBNodeData(AABB(Vector3(0.9,0.9,0.9), Vector3(1.0,1.0,1.0)),7))
   getaabb(x) = x.aabb
   getaabb(x::Nothing) = x
   @test contains((t |> data |> getaabb), (t |> left |> data |> getaabb))
