@@ -1006,5 +1006,74 @@ function loadmesh(filename::AbstractString)
   end
 end
 
+#==========  Collision Detection ============#
+
+include("BoundingVolumeTrees.jl")
+
+using .BoundingVolumeTrees
+
+export 
+BVH,
+Collider,
+collide_self,
+query_aabb,
+update_collider
+
+const BVH = BoundingVolumeTrees
+
+struct Collider{T,F}
+  bvh::BVH.DAABBNode{T,F}
+  mesh::BVH.Triangles{T,F}
+end
+
+"""
+    Collider(topo, P)
+
+precompute collision detection accelerators
+"""
+function Collider(topo::Topology, P::V) where {T, PT<:AbstractVector{T}, V<:Vector{PT}}
+  mesh = BVH.Triangles((collect∘flatten)(facelist(topo)),P)
+  bvh = BVH.createBVH(mesh)
+  Collider{Int64,T}(bvh, mesh)
+end
+
+"""
+    collide_self(topo, P, collidef)
+
+return a list of faces which are intersecting in the mesh.
+you must provide the face vs face collision routine in collidef
+"""
+collide_self(topo::Topology, P, collidef::F) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
+
+"""
+    collide_self(collider, collidef)
+
+return a list of faces which are intersecting in the mesh.
+you must provide the face vs face collision routine in collidef
+"""
+function collide_self(collider::Collider, collidef::F) where{F<:Function}
+  BVH.selfintersect(collider.bvh, collider.mesh, collidef)
+end
+
+"""
+    query_aabb(collider, aabb, hits)
+
+query the collision detection structure for a list of faces overlapping the given axis aligned bounding box
+new hits are pushed onto the passed in hits vector
+"""
+query_aabb(c::Collider{T,F}, aabb::BVH.AABB{F}, hits::Vector{T}) where {T,F} = BVH.query(c.bvh, aabb, hits) 
+
+function query_aabb(c::Collider{T,F}, aabb::BVH.AABB{F}) where {T,F}
+  hits = Vector{T}()
+  BVH.query(c.bvh, aabb, hits)
+  hits
+end
+
+"""
+    update_collider(collider)
+
+update the collision detection structures in collider to reflect any change in mesh positions
+"""
+update_collider( collider::C ) where C<:Collider = BVH.updateBVH(collider.bvh, collider.mesh)
 
 end # module

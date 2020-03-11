@@ -203,4 +203,41 @@ hey(x::Bar) = string("bar", x)
 
 end
 
+function cube()
+  P = [0 0 0
+       1 0 0
+       0 0 1
+       1 0 1
+       1 1 1
+       0 1 1
+       1 1 0
+       0 1 0
+      ]
+  P = SVector{3}.(eachrow(Float64.(P)))
+  (Topology([1,2,3, 2,4,3, 3,4,6, 4,5,6, 2,5,4, 2,7,5, 7,8,5, 5,8,6, 1,3,6, 1,6,8, 1,8,2, 2,8,7]), P)
+end
+
+@testset "collide" begin
+  topo,P = cube()
+  col = Collider(topo, P)
+  tophalf = query_aabb(col, HalfEdges.BVH.AABB(SVector{3}(0.,0.,0.5), SVector{3}(1.0,1.0,1.0)))  
+  # should contain all triangles other than bottom two
+  @test length(tophalf) == nfaces(topo)-2
+  @test isempty(tophalf ∩ [11, 12])   
+
+  #pull point into self intersection
+  col.mesh.P[1] = SVector{3}(0.5,0.5,2.0)
+  update_collider(col)
+  foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
+  @test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
+
+end
+
+@testset "load a mesh" begin
+  topo, P = loadmesh("bunnylow.obj")
+  @test typeof(topo) == Topology
+  @test nfaces(topo) > 0
+end
+
+include("BoundingVolumeTrees_runtests.jl")
 
