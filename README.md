@@ -174,6 +174,23 @@ Finally check we are pointing at vertex 6
     julia> (halfedge |> next |> opposite |> next |> next |> opposite |> next |> head)(topo, (3,1)) == ans
     true
 
+## Collision Detection
+
+There is support for accelerating collision queries using a Bounding Volume Hierarchy.
+
+    # create a Collider first to cache the BVH
+    julia> col = Collider(topo, P)
+
+    # can query all the faces that overlap a bounding box
+    julia> query_aabb(col, HalfEdges.BVH.AABB(SVector{3}(0.,0.,0.5), SVector{3}(1.0,1.0,1.0)))  
+
+    # we need to provide our own method to actually collide the candidate faces
+    julia> traingle_vs_triangle(a1,b1,c1, a2,b2,c2) = (true, "some collision data")  # provide your own
+
+    # now we can do a self-intersection test on the entire mesh
+    julia> hits = collide_self(col, triangle_vs_triangle)
+
+
 ## Project Information
 
 ### Contributing
