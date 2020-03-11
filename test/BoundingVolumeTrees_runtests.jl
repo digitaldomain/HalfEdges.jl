@@ -121,8 +121,10 @@ end
   t = insert(t,AABBNodeData(randAABB(),3))
   t = insert(t,AABBNodeData(randAABB(),4))
   t = insert(t,AABBNodeData(randAABB(),5))
-  @test contains((t |> data |> x->x.aabb), (t |> left |> data |> x->x.aabb))
-  @test contains((t |> data |> x->x.aabb), (t |> left |> right |> data |> x->x.aabb))
-  @test contains((t |> left |> data |> x->x.aabb), (t |> left |> right |> data |> x->x.aabb))
+  getaabb(x) = x.aabb
+  getaabb(x::Nothing) = x
+  @test contains((t |> data |> getaabb), (t |> left |> data |> getaabb))
+  @test contains((t |> data |> getaabb), (t |> left |> right |> data |> getaabb))
+  @test contains((t |> left |> data |> getaabb), (t |> left |> right |> data |> getaabb))
 
 end
