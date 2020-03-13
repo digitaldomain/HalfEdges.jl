@@ -1,5 +1,5 @@
-[![Build Status](https://travis-ci.com/mewertd2/HalfEdges.jl.svg?branch=master)](https://travis-ci.com/mewertd2/HalfEdges.jl)
-[![codecov.io](https://codecov.io/github/mewertd2/HalfEdges.jl/coverage.svg?branch=master)](https://codecov.io/github/mewertd2/HalfEdges.jl?branch=master)
+[![Build Status](https://travis-ci.com/digitaldomain/HalfEdges.jl.svg?branch=master)](https://travis-ci.com/digitaldomain/HalfEdges.jl)
+[![codecov.io](https://codecov.io/github/digitaldomain/HalfEdges.jl/coverage.svg?branch=master)](https://codecov.io/github/digitaldomain/HalfEdges.jl?branch=master)
 
 # HalfEdges
 
