@@ -49,7 +49,11 @@ export
   head,
   tail,
   isboundary,
-  opposite
+  opposite,
+  boundary_verts,
+  boundary_interior,
+  vertexnormals,
+  normals
 
 include("Handles.jl")
 
@@ -656,6 +660,11 @@ return faces as arrays of integers
 facelist(topo::Topology) = (x->Int.(vertices(topo,Polygon(topo,x)))).(faces(topo))
 
 
+"""
+  trinormal(topo, P, h)
+
+normal for triangle associated with HalfEdgeHandle h 
+"""
 function trinormal(topo::Topology, P, h::HalfEdgeHandle)
   h = isboundary(topo, h) ? opposite(topo, h) : h
   pa = P[head(topo, h)]; h = next(topo, h)
@@ -670,7 +679,47 @@ function trinormal(topo::Topology, P, h::HalfEdgeHandle)
   end
 end
 
+"""
+    normals(topo, P)
+
+triangle normals for all faces
+"""
 normals(topo::Topology, P) = map( fheh->trinormal(topo, P, fheh), faces(topo)) 
+
+
+function weightednormal(mesh, P, heh::HalfEdgeHandle)
+  p₀ = P[head(mesh, heh)]
+  heh₁ = next(mesh, heh)
+  p₁ = P[head(mesh, heh₁)]
+  p₂ = P[head(mesh, next(mesh, heh₁))]
+
+  (p₁-p₀)×(p₂-p₀)
+end
+
+"""
+    vertexnormal(topo, p, ring)
+
+normal of a vertex given it's OneRing
+"""
+function vertexnormal( mesh, P, ring::OneRing, normal = weightednormal )
+  iring = Iterators.filter(heh->!isboundary(mesh,heh),ring)
+  normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+end
+
+"""
+    vertexnormals(topo, P, weighted=true)
+
+vertex normals for all vertices in mesh, optionally area weighted.    
+"""
+function vertexnormals( mesh, P, weighted = true )
+  rings = (heh->OneRing(heh,mesh)).(vertices(mesh))
+  if weighted
+    n = ring->vertexnormal( mesh, P, ring, weightednormal )
+  else
+    n = ring->vertexnormal( mesh, P, ring, normalize∘weightednormal )
+  end
+  n.(rings)
+end
 
 """
   angles(topo, P, poly)
@@ -906,22 +955,33 @@ end
 """
   boundary_verts(topo)
 
-find loop of boundary verts
-assumes only one boundary loop exists
+find loops of boundary verts
 """
-boundary_verts(mesh) = BoundaryLoop(mesh,filter(∂(isboundary, mesh),halfedges(mesh)) |> first) |> ∂(map,∂(tail,mesh))
+function boundary_verts(topo) 
+  bh = filter(∂(isboundary, topo), halfedges(topo))
+
+  bvl = Vector{VertexHandle}[]
+
+  while !isempty(bh)
+    bl = BoundaryLoop(topo, bh |> first)
+    bh = setdiff(bh, bl)
+    push!(bvl, map(∂(tail, topo), bl))
+  end
+
+  bvl
+end
 
 """
-  boundary_interior(topo)
+  boundary_interior(topo, boundary)
 
-the set of vertices connected to the boundary but not part of the boundary
-assumes only one boundary loop exists
+the set of vertices connected to the boundary verts but not part of the boundary
 """
-function boundary_interior(mesh)
-  boundary = boundary_verts(mesh)
+function boundary_interior(mesh, boundary)
   allverts = mapreduce(x->OneRing(mesh, x) |> ∂(∂(mapreduce,(x->[x...])∘∂(edge,mesh)),vcat), vcat , boundary)
   setdiff(allverts,boundary)
 end
+
+boundary_interior(topo) = map(b->boundary_interior(topo, b), boundary_verts(topo))
 
 # single airty versions
 

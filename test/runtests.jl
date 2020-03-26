@@ -110,6 +110,10 @@ end
   FE = he_.incidence(topo, EdgeHandle, FaceHandle,true)
   EV = he_.incidence(topo, VertexHandle, EdgeHandle,true)
   @test iszero(FE*EV) 
+  @test length(vertexnormals(topo, P)) == nvertices(topo)
+  @test vertexnormals(topo,P)[1] == [0.0, 0.0, 1.0]
+  @test length(normals(topo, P)) == nfaces(topo) 
+  @test normals(topo,P)[1] == [0.0, 0.0, 1.0]
 end
 
 @testset "3x3grid" begin
@@ -117,7 +121,7 @@ end
   topo = Topology(Iterators.flatten([cell(1,1), cell(2,1), cell(3,1), 
                                      cell(1,2), cell(2,2), cell(3,2), 
                                      cell(1,3), cell(2,3), cell(3,3)])|>collect)
-  @test sort(he_.boundary_interior(topo)) == [6,7,10,11]
+  @test sort(first(he_.boundary_interior(topo))) == [6,7,10,11]
 
 end
 
