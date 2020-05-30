@@ -51,6 +51,7 @@ export
   isboundary,
   opposite,
   boundary_verts,
+  boundary_vertices,
   boundary_interior,
   vertexnormals,
   normals
@@ -970,6 +971,8 @@ function boundary_verts(topo)
 
   bvl
 end
+
+boundary_vertices(x) = boundary_verts(x)
 
 """
   boundary_interior(topo, boundary)
