@@ -379,7 +379,7 @@ function query( rootid::T, aabb::AABB{F}, hits::Vector{T},
             nscapacity *= 2
             nodestackprev = nodestack
             nodestack = Vector{T}(undef,nscapacity)
-            copy!(nodestack, 1, nodestackprev, 1, inodestack)
+            copyto!(nodestack, 1, nodestackprev, 1, inodestack)
           end
           inodestack += 1
           nodestack[inodestack] = childR

@@ -235,6 +235,31 @@ end
   foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
   @test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
 
+  #==
+      2---4-7
+     /|\  |\|
+    5 | \ | 6    then move 5 and 6 so they intersect
+     \|  \|/
+      1---3
+  ==#
+  F = [[1,3,2],[2,3,4],[2,5,1],[3,6,4]]
+  topo = Topology(F)
+  P = [0 0 0
+       0 1 0
+       1 0 0
+       1 1 0
+       1 0.5 1
+       0 0.5 1
+      ] 
+  P = SVector{3}.(eachrow(Float64.(P)))
+  foo(a1,a2,a3, b1,b2,b3) = a1[2] > 0.0   # our two triangle with z > 0 are in collision
+  hits = collide_self(Collider(topo, P), foo) 
+  @test length(hits) == 1
+
+  # want to get lots of hits to test when hits array is resized
+  topo = Topology(repeat(F, 100))
+  hits = collide_self(Collider(topo, P), foo) 
+  @test length(hits) > 1
 end
 
 @testset "load a mesh" begin
