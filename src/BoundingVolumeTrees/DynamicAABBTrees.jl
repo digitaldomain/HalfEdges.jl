@@ -445,6 +445,24 @@ function visit( ancestor::DAABBNode{T,F}, leaffcn = show, branchfcn = identity )
   end
 end
 
+"""
+visit nodes in depth first order
+general tree traversal with pre, post and inorder callback methods
+"""
+function visitdf( ancestor::DAABBNode{T,F}, pre, post = identity, inorder = identity ) where {T,F}
+  pre(ancestor) 
+  if !isnull(ancestor.left)
+    visitdf( ancestor.left, pre, post, inorder )
+  end
+  inorder(ancestor)
+  if !isnull(ancestor.right)
+    visitdf( ancestor.right, pre, post, inorder )
+  end
+  post(ancestor)
+end
+
+
+
 function visitreduce( ancestor::DAABBNode{T,F}, leaffcn, leaf0, branchfcn = (a,x)->a, branch0 = 0 ) where {T,F}
   if isleaf(ancestor)
     leaf0 = leaffcn(leaf0,ancestor)

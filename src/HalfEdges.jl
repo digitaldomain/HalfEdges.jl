@@ -1105,6 +1105,9 @@ end
 
 return a list of faces which are intersecting in the mesh.
 you must provide the face vs face collision routine in collidef
+
+collidef should be a function that accepts 6 points as arguments, which are the points of the two triangle.
+It should return a tuple where the first element is a boolean value indicating if there was a collision or not
 """
 collide_self(topo::Topology, P, collidef::F) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
 

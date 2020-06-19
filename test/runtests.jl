@@ -225,6 +225,12 @@ end
   topo,P = cube()
   col = Collider(topo, P)
   tophalf = query_aabb(col, HalfEdges.BVH.AABB(SVector{3}(0.,0.,0.5), SVector{3}(1.0,1.0,1.0)))  
+  pre = []
+  inorder = []
+  post = []
+  HalfEdges.BVH.visitdf(col.bvh, x->push!(pre, x), x->push!(post, x), x->push!(inorder, x))
+  @test length(pre) == length(post) == length(inorder) > 0
+
   # should contain all triangles other than bottom two
   @test length(tophalf) == nfaces(topo)-2
   @test isempty(tophalf ∩ [11, 12])   
