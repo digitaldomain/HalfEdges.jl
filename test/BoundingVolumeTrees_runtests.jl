@@ -23,6 +23,18 @@ const Vector3{T} = SVector{3,T}
 
   t = tree(["cat", "awnt", "aardvark", "ant", "dog", "dag", "zat", "doog"])
   @test leaves(t, x->length(key(x)) < 4) |> first |> key == "dag"
+
+  build_rosetta( (n, l, r ) ) = Node(n, build_rosetta(l), build_rosetta(r))
+  build_rosetta( n::Nothing ) = nothing
+  build_rosetta( n::Int ) = Node(n)
+  rosetta = build_rosetta((1, (2, (4, 7, nothing), 5), (3, (6, 8, 9), nothing)))
+   
+  @test reduce( *, Traverse(rosetta, x->string(" ", data(x)), nothing, nothing)) ==
+        " 1 2 4 7 5 3 6 8 9"
+  @test reduce( *, Traverse(rosetta, nothing, nothing, x->string(" ", data(x)))) ==
+        " 7 4 2 5 1 8 6 9 3"
+  @test reduce( *, Traverse(rosetta, nothing, x->string(" ", data(x)), nothing)) ==
+        " 7 4 5 2 8 9 6 3 1"
 end
 
 @testset "delete" begin

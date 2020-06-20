@@ -21,6 +21,7 @@ Node,
 Branch,
 Leaves,
 BinaryTree,
+Traverse,
 DepthFirst,
 BreadthFirst,
 BinarySearch,
@@ -134,6 +135,32 @@ const PathElement{T} = Tuple{Node{T},Symbol}
 const Path{T} = Vector{PathElement{T}}
 #const ReversePath{T} = Reverse{Path{T}}
 const ReversePath{T} = Union{Reverse{Path{T}},Drop{Reverse{Path{T}}}}  # awkward.
+
+#==== General Traversal ===#
+
+function traverse(node::BinaryTree{T}, c::Channel, pre, post, inorder) where T
+  if pre != nothing
+    push!(c, pre(node))
+  end
+
+  traverse(left(node), c, pre, post, inorder)
+  if inorder != nothing
+    push!(c, inorder(node))
+  end
+
+  traverse(right(node), c, pre, post, inorder)
+  if post != nothing
+    push!(c, post(node))
+  end
+end
+
+function traverse(node::Nothing, c::Channel, f...)
+end
+
+Traverse(tree::BinaryTree{T}, pre, post, inorder) where T = Channel() do c
+  traverse(tree, c, pre, post, inorder)
+end
+
 
 #==== DepthFirst Traversal ===#
 function Base.iterate(iter::DepthFirst{T}, children::Vector{Node{T}}) where T
