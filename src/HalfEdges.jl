@@ -96,8 +96,27 @@ const Mesh = Tuple{Topology, Vector{Vector3d}}
 const Edge = Tuple{Int,Int}
 
 HalfEdge(topo::Topology, heh::HalfEdgeHandle) = topo.he[heh]
+""" dereference the HalfEdgeHandle to get the struct """
 halfedge(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 get(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
+
+""" get a halfedge for this face """
+halfedge(topo::Topology, fh::FaceHandle) = topo.face2he[fh]
+
+""" get a halfedge for this vertex """
+halfedge(topo::Topology, vh::VertexHandle) = topo.v2he[vh]
+
+"""
+    halfedge( topo, vpair )
+
+The oriented halfedge for the edge connecting two vertex indices/handles.
+The halfedge points from first to second vertex in tuple vpair.
+"""
+halfedge(topo::Topology, e::T) where {T <: Tuple{VertexHandle, VertexHandle}} = 
+  Iterators.filter(h->head(topo, h)==e[2], OneRing(topo, e[1])) |> first
+
+halfedge(topo::Topology, e::T) where {V<:Integer, T<:Tuple{V,V}} = halfedge(topo, VertexHandle.(e))
+
 
 HalfEdgeHandle(topo::Topology, vh::VertexHandle) = topo.v2he[vh]
 
@@ -188,17 +207,6 @@ end
 
 halfedges(topo) = HalfEdgeHandle.(1:length(topo.he))
 halfedges(poly::Polygon) = [heh for heh in poly]
-
-"""
-    halfedge( topo, vpair )
-
-The oriented halfedge for the edge connecting two vertex indices/handles.
-The halfedge points from first to second vertex in tuple vpair.
-"""
-halfedge(topo::Topology, e::T) where {T <: Tuple{VertexHandle, VertexHandle}} = 
-  Iterators.filter(h->head(topo, h)==e[2], OneRing(topo, e[1])) |> first
-
-halfedge(topo::Topology, e::T) where {V<:Integer, T<:Tuple{V,V}} = halfedge(topo, VertexHandle.(e))
 
 edge(topo::Topology, heh::HalfEdgeHandle) =  (tail(topo,heh), head(topo,heh))
 "get an edge tuple from an EdgeHandle.  very slow"
@@ -492,7 +500,98 @@ function dihedral_angle(topo::Topology, P, h)
 end 
 
 """
-    polygons( topo )
+  solid_angle(topo, P, he, p)
+
+  
+the solid angle for the signed surface area of the triangle of he projected onto unit sphere centred at p 
+"""
+function solid_angle(topo::Topology, P::TA, h::HalfEdgeHandle, p::T) where {T, TA<:Vector{T}}
+  if isboundary(topo, h) 
+    return 0.0
+  end
+
+  a = P[head(topo, h)] - p
+  b = P[head(topo, next(topo, h))] - p
+  c = P[head(topo, next(topo, next(topo, h)))] - p
+  aa = norm(a); bb = norm(b); cc = norm(c)
+  2.0*atan(det(hcat(a,b,c)), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb) 
+end
+
+#=== some tensor stuff ===#
+# need this to make approximate winding numbers managable
+# works pretty seamlessly with julia's multidimensional arrays. 
+# pops out an Array quite easily from pretty much any sensible operation
+
+struct LazyTensor{T,N} <: AbstractArray{T,N}
+  V::NTuple{N}
+  dim
+end
+
+Base.size(T::LazyTensor) = T.dim
+Base.getindex(T::LazyTensor, I::Vararg{Int,N}) where N = prod(map(i->T.V[i][I[i]], 1:length(I)))
+Base.IndexStyle(::Type{LazyTensor}) = IndexCartesian()
+
+⊗(a::T, b::T) where {F<:Real, T<:AbstractVector{F}} = LazyTensor{F,2}((a,b), (length(a), length(b)))
+
+⊗(a::T, b::VT) where {F<:Real, T<:AbstractVector{F}, N, VT<:LazyTensor{F,N}} = 
+  LazyTensor{F,N+1}((a, b.V...), (length(a), b.dim...))
+
+⊗(a::VT, b::T) where {F<:Real, T<:AbstractVector{F}, N, VT<:LazyTensor{F,N}} = 
+  LazyTensor{F,N+1}((a.V..., b), (a.dim..., length(b)))
+
+
+
+# dipole derivatives from appendix A of "Fast Winding Numbers for Soups and Clouds"
+function ∇G(q,x) 
+  r = x-q
+  r/(4.0π*norm(r)^3)
+end
+
+function ∇²G(q,x)
+  r = x-q
+  rlen = norm(r)
+  I/(4.0π*rlen^3) - 3.0r⊗r/(4.0π*rlen^5)
+end
+
+function ∇³G(q,x)
+  r = x-q
+  rlen = norm(r)
+  # literally from the paper, lots of 0*0 happening
+  sum(map(eᵢ->r⊗eᵢ⊗eᵢ + eᵢ⊗r⊗eᵢ + eᵢ⊗eᵢ⊗r, [SVector(1.0,0.0,0.0),
+                                            SVector(0.0,1.0,0.0),
+                                            SVector(0.0,0.0,1.0)]))/(-4.0π*rlen^5) + 
+  15.0r⊗r⊗r/(4.0π*rlen^7)
+end
+
+# triangle integrals from appendix B of "Fast Winding Numbers for Soups and Clouds"
+
+
+"""
+    inside_verts(topo, P, tris)
+
+return the vertices on the inside of a set of overlapping tris
+"""
+function inside_verts(topo, P, overlaptris::Tuple{HalfEdgeHandle, HalfEdgeHandle})
+  reduce() 
+
+end
+
+"""
+    enclose(topo, P, boundary_faces)
+
+return a list of all vertices enclosed by a contour of intersecting faces.  
+If the mesh is not closed this may return all the vertices in the mesh. 
+"""
+function enclose(topo, P, boundary::Vector{Tuple{HalfEdgeHandle, HalfEdgeHandle}})
+  #nPi = map(boundary_faces) do heh
+
+  #end
+end
+
+#enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
+
+"""
+    polygons(topo)
 
 extract polygons as arrays of vertex indices 
 """
@@ -502,7 +601,7 @@ minussigned( ::Val{false} ) = 1.0
 minussigned( ::Val{true} ) = -1.0
 
 """
-    incidence( topo, AHandleType, BHandleType, oriented = false )
+    incidence(topo, AHandleType, BHandleType, oriented = false)
 
 build incidence matrix mapping between two elements
 |b|x|a| matrix. i.e. incidence of {vertex} and {face} has size(vertex) columns and size(face) rows
@@ -1072,8 +1171,10 @@ end
 #==========  Collision Detection ============#
 
 include("BoundingVolumeTrees.jl")
+include("Collision.jl")
 
 using .BoundingVolumeTrees
+using .Collision
 
 export 
 BVH,
@@ -1104,20 +1205,20 @@ end
     collide_self(topo, P, collidef)
 
 return a list of faces which are intersecting in the mesh.
-you must provide the face vs face collision routine in collidef
+provide the face vs face collision method in collidef
 
 collidef should be a function that accepts 6 points as arguments, which are the points of the two triangle.
 It should return a tuple where the first element is a boolean value indicating if there was a collision or not
 """
-collide_self(topo::Topology, P, collidef::F) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
+collide_self(topo::Topology, P, collidef::F = Collision.triangle_triangle) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
 
 """
     collide_self(collider, collidef)
 
 return a list of faces which are intersecting in the mesh.
-you must provide the face vs face collision routine in collidef
+provide the face vs face collision method in collidef
 """
-function collide_self(collider::Collider, collidef::F) where{F<:Function}
+function collide_self(collider::Collider, collidef::F = Collision.triangle_triangle) where{F<:Function}
   BVH.selfintersect(collider.bvh, collider.mesh, collidef)
 end
 

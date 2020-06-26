@@ -137,6 +137,7 @@ const Path{T} = Vector{PathElement{T}}
 const ReversePath{T} = Union{Reverse{Path{T}},Drop{Reverse{Path{T}}}}  # awkward.
 
 #==== General Traversal ===#
+# Transducers should give better performance than Channel
 
 function traverse(node::BinaryTree{T}, c::Channel, pre, post, inorder) where T
   if pre != nothing

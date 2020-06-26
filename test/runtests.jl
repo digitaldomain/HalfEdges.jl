@@ -238,8 +238,9 @@ end
   #pull point into self intersection
   col.mesh.P[1] = SVector{3}(0.5,0.5,2.0)
   update_collider(col)
-  foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
-  @test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
+  #foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
+  #@test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
+  @test collide_self(col) == collide_self(topo, col.mesh.P)
 
   #==
       2---4
@@ -258,14 +259,28 @@ end
        0 0.5 1
       ]
   P = SVector{3}.(eachrow(Float64.(P)))
-  foo(a1,a2,a3, b1,b2,b3) = a1[2] > 0.0   # our two triangle with z > 0 are in collision
-  hits = collide_self(Collider(topo, P), foo)
+  #foo(a1,a2,a3, b1,b2,b3) = a1[2] > 0.0   # our two triangle with z > 0 are in collision
+  #hits = collide_self(Collider(topo, P), foo)
+  hits = collide_self(Collider(topo, P))
   @test length(hits) == 1
 
   # want to get lots of hits to test when hits array is resized
   topo = Topology(repeat(F, 100))
-  hits = collide_self(Collider(topo, P), foo)
+  #hits = collide_self(Collider(topo, P), foo)
+  hits = collide_self(Collider(topo, P))
   @test length(hits) > 1
+end
+
+@testset "winding numbers" begin
+  topo, P = cube()
+
+  Fi = FaceHandle.(1:nfaces(topo))
+  centre = sum(P)/length(P)
+  @test sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), centre), Fi)) ≈ 4.0*π
+  @test sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), P[1]), Fi)) ≈ π/2.0
+
+  # outside, accuracy seems lower for some reason
+  @test abs(sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), P[1]-centre), Fi))) < 1e6 
 end
 
 @testset "load a mesh" begin
