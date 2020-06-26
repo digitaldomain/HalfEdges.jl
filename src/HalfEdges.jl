@@ -539,6 +539,8 @@ Base.IndexStyle(::Type{LazyTensor}) = IndexCartesian()
 ⊗(a::VT, b::T) where {F<:Real, T<:AbstractVector{F}, N, VT<:LazyTensor{F,N}} = 
   LazyTensor{F,N+1}((a.V..., b), (a.dim..., length(b)))
 
+⊗(a) = ⊗(a, a)
+
 
 
 # dipole derivatives from appendix A of "Fast Winding Numbers for Soups and Clouds"
@@ -557,6 +559,7 @@ function ∇³G(q,x)
   r = x-q
   rlen = norm(r)
   # literally from the paper, lots of 0*0 happening
+  # likely we wont actually use this third order expansion, so don't worry about optz right now
   sum(map(eᵢ->r⊗eᵢ⊗eᵢ + eᵢ⊗r⊗eᵢ + eᵢ⊗eᵢ⊗r, [SVector(1.0,0.0,0.0),
                                             SVector(0.0,1.0,0.0),
                                             SVector(0.0,0.0,1.0)]))/(-4.0π*rlen^5) + 
@@ -565,6 +568,42 @@ end
 
 # triangle integrals from appendix B of "Fast Winding Numbers for Soups and Clouds"
 
+"""
+    approx_winding_number(topo, P, F, order=3)
+
+assumes triangle mesh.  approximate winding number function for a cluster of triangles
+"""
+function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=3)
+
+  Pees = unique(mapreduce(partial(vertices, topo), vcat, F; init=[]))
+  p̃ = sum(P[Pees])/length[Pees]
+
+  ant = map(partial(weightednormal, topo, P), F)
+
+  term1 = sum(ant)
+  term2 = map(zip(ant, F)) do (antᵢ, heh)
+    (P[vertices(topo, heh)]/3.0 - p̃)⊗antᵢ
+  end |> sum
+
+  if order == 3
+    term3 = map(zip(ant, F)) do (antᵢ, heh)
+      xᵢ, xⱼ, xk = P[vertices(topo, heh)]
+      Ct = ⊗(0.5*(xᵢ+xⱼ)-p̃) +
+           ⊗(0.5*(xⱼ+xk)-p̃) +
+           ⊗(0.5*(xk+xᵢ)-p̃)
+      Ct⊗antᵢ
+    end |> sum |> partial(*, 1.0/6.0)
+
+    w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃) + term3⋅∇³G(q, p̃)
+  else
+    w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃)
+  end
+
+  # is storing a closure reasonably performant?  if not we should just be storing (p̃, term1...)
+  return w̃
+end
+
+approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
 
 """
     inside_verts(topo, P, tris)
@@ -572,7 +611,7 @@ end
 return the vertices on the inside of a set of overlapping tris
 """
 function inside_verts(topo, P, overlaptris::Tuple{HalfEdgeHandle, HalfEdgeHandle})
-  reduce() 
+  reduce()
 
 end
 
@@ -589,6 +628,15 @@ function enclose(topo, P, boundary::Vector{Tuple{HalfEdgeHandle, HalfEdgeHandle}
 end
 
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
+
+function flood_fill_intersections(topo::Topology)
+  # find intersections
+
+  # isolate islands
+  
+
+
+end
 
 """
     polygons(topo)
@@ -787,13 +835,18 @@ triangle normals for all faces
 normals(topo::Topology, P) = map( fheh->trinormal(topo, P, fheh), faces(topo)) 
 
 
+"""
+    weightednormal(topo, P, heh)
+
+area weighted normal of a triangle
+"""
 function weightednormal(mesh, P, heh::HalfEdgeHandle)
   p₀ = P[head(mesh, heh)]
   heh₁ = next(mesh, heh)
   p₁ = P[head(mesh, heh₁)]
   p₂ = P[head(mesh, next(mesh, heh₁))]
 
-  (p₁-p₀)×(p₂-p₀)
+  0.5*(p₁-p₀)×(p₂-p₀)
 end
 
 """
