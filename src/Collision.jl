@@ -3,7 +3,7 @@ Collision detection
 """
 module Collision
 
-export triangle_triangle, triangle_line, triangle_plane, plane_segement, γpoint
+export triangle_triangle, triangle_line, triangle_plane, plane_segement, triangle_edges, γpoint
 
 using StaticArrays, SparseArrays, LinearAlgebra, Base.Iterators, IterTools
 
@@ -36,7 +36,7 @@ import Base.sign
 sign(ps) = sign(real(tr(ps*𝐼)))
 
 """ 
-    γpoint(x,y,z) 
+    γpoint(x,y,z)
 
 create a homogeneous point for collision detection using our specialized basis.
 simply pass in the euclidean x,y,z coordinates
@@ -59,7 +59,7 @@ triangle_plane((a,b,c)::Tuple{P,P,P}, p::V) where {V<:ProjectivePlane, P<:Projec
   !(sign(p∧a) == sign(p∧b) == sign(p∧c))
 
 
-""" true if triangle and segment intersect """
+""" true if plane and segment intersect """
 plane_segment(abc::V, (d,e)::Tuple{P,P}) where {V<:ProjectivePlane, P<:ProjectivePoint} =
   sign(abc∧d) != sign(abc∧e)
 
@@ -99,5 +99,38 @@ function triangle_triangle((a,b,c)::T, (d,e,f)::T) where {P<:SVector, T<:Tuple{P
 end
 
 triangle_triangle(a,b,c,d,e,f) = triangle_triangle((a,b,c), (d,e,f))
+
+""" 
+    triangle_edges(a,b,c, d,e,f)
+
+return true if the triangle defined by points a,b,c is intersecting the triangle defined by points d,e,f
+the hit record will include all edges intersecting the interior of a triangle
+
+the format of the hit record is:  ({true|false}, ({triangleID},({vertexID, vertexID}))) 
+triangleID = 1 or 2 to indicate triangle abc or def and vertexID is in range 1:3 indicating coresponding [a,b,c] or [d,e,f] index of other triangle.
+
+operates on projective points created by γpoint
+"""
+function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:ProjectivePoint}
+  abc = a∧b∧c
+  def = d∧e∧f
+  abc_edges = ((a,b), (b,c), (c,a))
+  iabc_edges = ((2,(1,2)), (2,(2,3)), (2,(3,1)))
+  def_edges = ((d,e), (e,f), (f,d))
+  idef_edges = ((1,(1,2)), (1,(2,3)), (1,(3,1)))
+
+  check_plane(plane, edges) = ( plane_segment(plane, edge) for edge in edges )
+  check_plane2(plane, edges) = imap(second, Iterators.filter(first, zip(check_plane(plane, edges), edges)))
+
+  check_tri(tri, plane, edges) = ( triangle_line(tri, edge) for edge in check_plane2(plane, edges) )
+
+  hits = vcat(Iterators.filter(first, zip(check_tri((a,b,c), abc, def_edges), idef_edges))|>collect,
+              Iterators.filter(first, zip(check_tri((d,e,f), def, abc_edges), iabc_edges))|>collect )
+  (length(hits) > 0, map(second,hits))
+end
+
+function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:SVector}
+  triangle_edges(γpoint(a), γpoint(b), γpoint(c), γpoint(d), γpoint(e), γpoint(f))
+end
 
 end

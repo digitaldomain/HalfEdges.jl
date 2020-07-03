@@ -54,7 +54,8 @@ export
   boundary_vertices,
   boundary_interior,
   vertexnormals,
-  normals
+  normals,
+  polygons
 
 include("Handles.jl")
 
@@ -523,24 +524,45 @@ end
 # pops out an Array quite easily from pretty much any sensible operation
 
 struct LazyTensor{T,N} <: AbstractArray{T,N}
-  V::NTuple{N}
+  V::Union{NTuple{N}, Vector{LazyTensor{T,N}}}
   dim
 end
 
-Base.size(T::LazyTensor) = T.dim
-Base.getindex(T::LazyTensor, I::Vararg{Int,N}) where N = prod(map(i->T.V[i][I[i]], 1:length(I)))
+Base.size(A::LazyTensor) = A.dim
+Base.getindex(A::LazyTensor{T,N}, I::Vararg{Int,NN}) where {T,N,NN} = getlazyindex(A.V, I...)
+
+getlazyindex(V::NTuple{N}, I::Vararg{Int,NN}) where {N,NN} = prod(map(i->V[i][I[i]], 1:length(I)))
+
+function getlazyindex(V::Vector{LazyTensor{T,N}}, I::Vararg{Int,NN}) where {T,N,NN} 
+  sum(map(Aᵢ->getindex(Aᵢ, I...), V))
+end
+
 Base.IndexStyle(::Type{LazyTensor}) = IndexCartesian()
+
+cons(a::T, b::NTuple{N,T}) where {N,T} = (a, b...) 
+cons(a::T, b::Vector{T}) where T = vcat(a, b)
+cons(a::NTuple{N,T}, b::T) where {N,T} = (a..., b) 
+cons(a::Vector{T}, b::T) where T = vcat(a, b)
+
+""" distributes ⊗ into a + b +... """
+cons(a::Vector{LazyTensor{T,N}}, b::AbstractVector{T}) where {N,T} = map(aᵢ->aᵢ⊗b, a)
+cons(a::AbstractVector{T}, b::Vector{LazyTensor{T,N}}) where {N,T} = map(bᵢ->a⊗bᵢ, b)
 
 ⊗(a::T, b::T) where {F<:Real, T<:AbstractVector{F}} = LazyTensor{F,2}((a,b), (length(a), length(b)))
 
 ⊗(a::T, b::VT) where {F<:Real, T<:AbstractVector{F}, N, VT<:LazyTensor{F,N}} = 
-  LazyTensor{F,N+1}((a, b.V...), (length(a), b.dim...))
+  LazyTensor{F,N+1}(cons(a, b.V), (length(a), b.dim...))
 
 ⊗(a::VT, b::T) where {F<:Real, T<:AbstractVector{F}, N, VT<:LazyTensor{F,N}} = 
-  LazyTensor{F,N+1}((a.V..., b), (a.dim..., length(b)))
+  LazyTensor{F,N+1}(cons(a.V, b), (a.dim..., length(b)))
+
+#!me don't actually need this, so didn't finish implementing
+#⊗(a::TA, b::TB) where {F<:Real, NA, TA<:LazyTensor{F,NA}, NB, TB<:LazyTensor{F,NB}} = 
+#  LazyTensor{F,NA+NB}(cons(a.V, b.V), (a.dim..., b.dim...))
 
 ⊗(a) = ⊗(a, a)
 
+Base.:+(a::LT, b::LT) where {T, N, LT<:LazyTensor{T,N}} = LazyTensor{T, N}([a,b], a.dim)
 
 
 # dipole derivatives from appendix A of "Fast Winding Numbers for Soups and Clouds"
@@ -576,13 +598,13 @@ assumes triangle mesh.  approximate winding number function for a cluster of tri
 function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=3)
 
   Pees = unique(mapreduce(partial(vertices, topo), vcat, F; init=[]))
-  p̃ = sum(P[Pees])/length[Pees]
+  p̃ = sum(P[Pees])/length(Pees)
 
   ant = map(partial(weightednormal, topo, P), F)
 
   term1 = sum(ant)
   term2 = map(zip(ant, F)) do (antᵢ, heh)
-    (P[vertices(topo, heh)]/3.0 - p̃)⊗antᵢ
+    (sum(P[vertices(topo, heh)])/3.0 - p̃)⊗antᵢ
   end |> sum
 
   if order == 3
@@ -629,12 +651,44 @@ end
 
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
 
-function flood_fill_intersections(topo::Topology)
+"""
+    floodfill(topo, P)
+
+flood fill values at vertices where intersecting triangles create barrier.
+"""
+function floodfill(topo::Topology, P)
   # find intersections
+  hits = collide_self(topo, P, triangle_edges);  
+  # hit record example: (358, 6709, (true, Tuple{Int64,Tuple{Int64,Int64}}[(1, (2, 3)), (2, (1, 2))]))
+  # (triangle1_index, triangle2_index, (true, [(which triangle, (edge vertices))...]))
+  # means triangle 358 was pierced by edge with vertices polygons(topo)[358][[2,3]]
+  # and   triangle 6709was pierced by edge with vertices polygons(topo)[6709][[1,2]]
+  
+  F = polygons(topo)
+  n = normals(topo, P) 
+
+
+  # this is not perfect, *--V--* hits 2 tris, can't determine which side it's on
+  #!me need to use winding numbers
+  for (tri1, tri2, (_, edges)) in hits
+    for (whichtri, (a, b)) in edges
+      if whichtri == 1
+        facetri = tri1
+        edgetri = tri2
+      else
+        facetri = tri2
+        edgetri = tri1
+      end
+      Fedge = F[edgetri]
+      Fface = F[facetri]
+      side = n[facetri]⋅(P[Fedge[a]]-P[Fface[1]]) > 0.0 ? 1 : -1
+      hitside[Fedge[a]] = side
+      side = n[facetri]⋅(P[Fedge[b]]-P[Fface[1]]) > 0.0 ? 1 : -1
+      hitside[Fedge[b]] = side
+    end
+  end
 
   # isolate islands
-  
-
 
 end
 
@@ -1225,9 +1279,11 @@ end
 
 include("BoundingVolumeTrees.jl")
 include("Collision.jl")
+include("IslandFind.jl")
 
 using .BoundingVolumeTrees
 using .Collision
+using .IslandFind
 
 export 
 BVH,
