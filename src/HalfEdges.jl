@@ -522,6 +522,7 @@ end
 # need this to make approximate winding numbers managable
 # works pretty seamlessly with julia's multidimensional arrays. 
 # pops out an Array quite easily from pretty much any sensible operation
+# make sure to convert to Array after precomputation as this isn't very performant for access
 
 struct LazyTensor{T,N} <: AbstractArray{T,N}
   V::Union{NTuple{N}, Vector{LazyTensor{T,N}}}
@@ -574,7 +575,7 @@ end
 function ∇²G(q,x)
   r = x-q
   rlen = norm(r)
-  I/(4.0π*rlen^3) - 3.0r⊗r/(4.0π*rlen^5)
+  I/(4.0π*rlen^3) - 3.0*Array(r⊗r)/(4.0π*rlen^5)
 end
 
 function ∇³G(q,x)
@@ -582,10 +583,10 @@ function ∇³G(q,x)
   rlen = norm(r)
   # literally from the paper, lots of 0*0 happening
   # likely we wont actually use this third order expansion, so don't worry about optz right now
-  sum(map(eᵢ->r⊗eᵢ⊗eᵢ + eᵢ⊗r⊗eᵢ + eᵢ⊗eᵢ⊗r, [SVector(1.0,0.0,0.0),
-                                            SVector(0.0,1.0,0.0),
-                                            SVector(0.0,0.0,1.0)]))/(-4.0π*rlen^5) + 
-  15.0r⊗r⊗r/(4.0π*rlen^7)
+  Array(sum(map(eᵢ->r⊗eᵢ⊗eᵢ + eᵢ⊗r⊗eᵢ + eᵢ⊗eᵢ⊗r, [SVector(1.0,0.0,0.0),
+                                                  SVector(0.0,1.0,0.0),
+                                                  SVector(0.0,0.0,1.0)])))/(-4.0π*rlen^5) + 
+  15.0*Array(r⊗r⊗r)/(4.0π*rlen^7)
 end
 
 # triangle integrals from appendix B of "Fast Winding Numbers for Soups and Clouds"
@@ -605,7 +606,7 @@ function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=3)
   term1 = sum(ant)
   term2 = map(zip(ant, F)) do (antᵢ, heh)
     (sum(P[vertices(topo, heh)])/3.0 - p̃)⊗antᵢ
-  end |> sum
+  end |> sum |> Array
 
   if order == 3
     term3 = map(zip(ant, F)) do (antᵢ, heh)
@@ -614,7 +615,7 @@ function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=3)
            ⊗(0.5*(xⱼ+xk)-p̃) +
            ⊗(0.5*(xk+xᵢ)-p̃)
       Ct⊗antᵢ
-    end |> sum |> partial(*, 1.0/6.0)
+    end |> sum |> partial(*, 1.0/6.0) |> Array
 
     w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃) + term3⋅∇³G(q, p̃)
   else
