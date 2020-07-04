@@ -28,6 +28,7 @@ BinarySearch,
 Path,
 ReversePath,
 empty_node,
+isempty_node,
 left,
 right,
 data,
@@ -107,8 +108,8 @@ import AbstractTrees.printnode
 import AbstractTrees.Leaves
 
 children( n::Nothing ) = ()
-children( n::Node{T} ) where T = (right(n),left(n))
-printnode(io::IO, n::Node{T}) where T = show(data(n))
+children( n::BinaryTree{T} ) where T = (right(n),left(n))
+printnode(io::IO, n::BinaryTree{T}) where T = show(data(n))
 printnode(io::IO, n::Nothing ) = nothing
 
 
@@ -119,7 +120,10 @@ end
 rest(a::Vector{T}) where T = Vector{T}(a[2:end])
 rest(a::NTuple{T}) where T = a[2:end]
 
-isleaf(a::Node{T}) where T = (left(a) == empty_node && right(a) == empty_node)
+isempty_node(n::Nothing) = true
+isempty_node(n) = false
+
+isleaf(a::BinaryTree{T}) where T = (isempty_node(left(a)) && isempty_node(right(a)))
 
 #==
 abstract type Path end
@@ -131,7 +135,7 @@ end
 struct IndexPath{} end
 ==#
 
-const PathElement{T} = Tuple{Node{T},Symbol}
+const PathElement{T} = Tuple{BinaryTree{T},Symbol}
 const Path{T} = Vector{PathElement{T}}
 #const ReversePath{T} = Reverse{Path{T}}
 const ReversePath{T} = Union{Reverse{Path{T}},Drop{Reverse{Path{T}}}}  # awkward.
@@ -164,39 +168,39 @@ end
 
 
 #==== DepthFirst Traversal ===#
-function Base.iterate(iter::DepthFirst{T}, children::Vector{Node{T}}) where T
+function Base.iterate(iter::DepthFirst{T}, children::Vector{BinaryTree{T}}) where T
   if length(children) == 0
     return nothing
   end
   child = first(children)
-  (child, vcat(Vector{Node{T}}(filter(x->x!=nothing,[left(child), right(child)])), rest(children)))
+  (child, vcat(Vector{BinaryTree{T}}(filter(x->x!=nothing,[left(child), right(child)])), rest(children)))
 end
 
 function Base.iterate(iter::DepthFirst{T}) where T
-  (iter.tree,Vector{Node{T}}(filter(x->x!=nothing,[left(iter.tree), right(iter.tree)])))
+  (iter.tree,Vector{BinaryTree{T}}(filter(x->x!=nothing,[left(iter.tree), right(iter.tree)])))
 end
 
 Base.length(iter::DepthFirst{T}) where T = reduce( (acc,_)->acc+1, iter; init=0)
 
-Base.iterate(tree::Node{T}) where T = iterate(DepthFirst(tree))
-Base.iterate(iter::Node{T}, children::Vector{Node{T}}) where T = iterate(DepthFirst(iter), children)
-Base.length(iter::Node{T}) where T = length(DepthFirst{T}(iter))
+Base.iterate(tree::BinaryTree{T}) where T = iterate(DepthFirst(tree))
+Base.iterate(iter::BinaryTree{T}, children::Vector{BinaryTree{T}}) where T = iterate(DepthFirst(iter), children)
+Base.length(iter::BinaryTree{T}) where T = length(DepthFirst{T}(iter))
 
 #===== BreadthFirst Traversal ===#
 struct BreadthFirst{T}
   tree::BinaryTree{T}
 end
 
-function Base.iterate(iter::BreadthFirst{T}, children::Vector{Node{T}}) where T
+function Base.iterate(iter::BreadthFirst{T}, children::Vector{BinaryTree{T}}) where T
   if length(children) == 0
     return nothing
   end
   child = last(children)
-  (child, vcat(Vector{Node{T}}(filter(x->x!=nothing,[right(child), left(child)])), children[1:end-1]))
+  (child, vcat(Vector{BinaryTree{T}}(filter(x->x!=nothing,[right(child), left(child)])), children[1:end-1]))
 end
 
 function Base.iterate(iter::BreadthFirst{T}) where T
- (iter.tree,Vector{Node{T}}(filter(x->x!=nothing,[right(iter.tree), left(iter.tree)])))
+ (iter.tree,Vector{BinaryTree{T}}(filter(x->x!=nothing,[right(iter.tree), left(iter.tree)])))
 end
 
 Base.length(iter::BreadthFirst{T}) where T = length(DepthFirst(iter.tree))
@@ -248,8 +252,8 @@ height(t::Branch{T}, h::Int) where T = max(height(left(t),h+1), height(right(t),
 height(t::BinaryTree{T}) where T = height(t, 0)
 
 #===== Leaf Traversal ===#
-Leaves( a::Node{T}, descend::Function = x->true ) where {T} = Channel(ctype=Node{T}) do c
-  nodestack = Vector{Node{T}}()
+Leaves( a::BinaryTree{T}, descend::Function = x->true ) where {T} = Channel(ctype=BinaryTree{T}) do c
+  nodestack = Vector{BinaryTree{T}}()
 
   if descend(a)
     push!(nodestack,a)
@@ -274,17 +278,17 @@ Leaves( a::Node{T}, descend::Function = x->true ) where {T} = Channel(ctype=Node
   end
 end
 
-leaves( a::Node{T}, descend::Function = x->true ) where T = Leaves( a, descend )
+leaves( a::BinaryTree{T}, descend::Function = x->true ) where T = Leaves( a, descend )
 
 """
   search nodes until ftest passes. returns the subtree rooted there
 """
-search( ftest::Function, tree::Node{T} ) where T = Iterators.filter(ftest,tree) |> first
+search( ftest::Function, tree::BinaryTree{T} ) where T = Iterators.filter(ftest,tree) |> first
 
 """
   search nodes until we find the node with given value. returns the subtree rooted there
 """
-search( k::T, tree::Node{T} ) where T = search(x->key(x)==k, tree)
+search( k::T, tree::BinaryTree{T} ) where T = search(x->key(x)==k, tree)
 
 """
   search nodes until ftest passes, return the path to that node
@@ -338,7 +342,7 @@ rebuild_leaf( ::Type{NotFullTree}, direction::Symbol, parent::N, d::T ) where {N
 function rebuild_leaf( ::Type{FullTree}, direction::Symbol, fatherbrother::N, d::T ) where {N,T}
   newleaf = rebuild_node( Val(direction), empty_node, empty_node, fatherbrother, d )
   twigd = rebuild_parent_data( Val(:both), keyval(newleaf), keyval(fatherbrother), nothing ) 
-  # well now, this is incestuous. the last fatherbrother is ingored usually.
+  # well now, this is incestuous. the last fatherbrother is ignored usually.
   #!me maybe that last fatherbrother should be nothing?  then change rebuild_node to accept Branch there
   #!me might result in ambiguous dispatch for wrapped type?
   twig = rebuild_node(Val(:both), newleaf, fatherbrother, fatherbrother, twigd)

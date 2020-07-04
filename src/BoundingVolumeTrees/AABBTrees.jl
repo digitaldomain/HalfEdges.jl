@@ -9,7 +9,7 @@ using Base.Iterators
 
 struct AABBNodeData{T,S}
   aabb::AABB{T}
-  entity::S  #!me union of parent pointer and entityID?  entity only relevant at leaf
+  entity::S
 end
 
 AABBNodeData{T,S}() where {T,S} = AABBNodeData{T,S}(AABB{T}(), nothing)
