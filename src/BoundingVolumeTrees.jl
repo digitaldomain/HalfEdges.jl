@@ -9,6 +9,7 @@ const Vector3 = Point
 include("BoundingVolumeTrees/BinaryTrees.jl")
 include("BoundingVolumeTrees/AABBs.jl")
 include("BoundingVolumeTrees/AABBTrees.jl")
+include("BoundingVolumeTrees/IndexedBinaryTrees.jl")
 
 #!me this one is optimized, but lacking features like balancing
 #!me also the design is a bit grim

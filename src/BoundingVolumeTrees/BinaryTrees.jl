@@ -313,7 +313,7 @@ branch_compare( d::S ) where {S} = st-> d < key(st) ? :left : :right
 """
   return a new tree with new node inserted on branch where data < parent.data decends to left
 """
-insert( ::Type{NotFullTree}, t::N, d::T ) where {T, N<:Node{T}} =
+insert( ::Type{NotFullTree}, t::N, d::T ) where {T, N<:BinaryTree{T}} =
   rbuild(reverse_path(BinarySearch(t, 
                                    branch_compare( key(d) ))),
          N(d,empty_node,empty_node))
@@ -330,7 +330,9 @@ function insert( ::Type{FullTree}, t::N, d::T ) where {T, N<:Node{T}}
   rbuild( rpath, twig )
 end
 
-insert( t::N, d::T ) where {T, N<:Node{T}} = insert( fullness(N), t, d )
+insert( t::N, d::T ) where {T, N<:BinaryTree{T}} = insert( fullness(N), t, d )
+#insert( t::N, d::T ) where {T, N<:Node{T}} = insert( fullness(N), t, d )
+#insert( t::N, d::T ) where {T, N<:BinaryTree{T}} = insert( fullness(N), t, d )
 """
   rebuild a tree given a path.  path will be created, all other branches preserved
 """

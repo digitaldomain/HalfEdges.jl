@@ -628,6 +628,9 @@ end
 
 approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
 
+function winding_number_cache(topo, P)
+end
+
 """
     inside_verts(topo, P, tris)
 
