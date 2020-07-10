@@ -45,8 +45,8 @@ path,
 reverse_path,
 replace_node,
 delete,
-update
-
+update,
+fullness
 
 using Base.Iterators
 using Base.Iterators:Reverse
@@ -76,6 +76,7 @@ struct Node{T} <: BinaryTree{T}
 end
 
 Node(data::T) where T = Node(data,empty_node,empty_node)
+Node{T}(data::T) where T = Node(data)
 
 left(tree::Node{T}) where T = tree.left
 right(tree::Node{T}) where T = tree.right
@@ -88,9 +89,11 @@ leaf(data::T) where T = Node(data)
 key(d::Any) = d
 value(d::Any) = d
 
+#==
 internal_nodedata(::Type{T}) where T = one(T) 
 internal_nodedata(::Type{T}) where {T<:AbstractArray} = T()
 internal_nodedata(::Type{W}) where {T,W<:WrappedData{T}} = internal_nodedata(T) 
+==#
 
 #  Traits  #
 
@@ -99,8 +102,8 @@ abstract type Fullness  end
 struct FullTree <: Fullness end
 struct NotFullTree <: Fullness end
 
-fullness(::Type{Node{T}}) where {T} = NotFullTree
-fullness(::Type{Node{W}}) where {T,W<:WrappedData{T}} = fullness(Node{T})
+fullness(::Type{BT}) where {T, BT<:BinaryTree{T}} = NotFullTree
+fullness(::Type{BT}) where {T, W<:WrappedData{T}, BT<:BinaryTree{W}} = fullness(BinaryTree{T})
 
 # AbstractTrees interface
 import AbstractTrees.children
@@ -108,10 +111,10 @@ import AbstractTrees.printnode
 import AbstractTrees.Leaves
 
 children( n::Nothing ) = ()
-children( n::BinaryTree{T} ) where T = (right(n),left(n))
+children( n::BinaryTree{T} ) where T = isleaf(n) ? () : (left(n), right(n))
+
 printnode(io::IO, n::BinaryTree{T}) where T = show(data(n))
 printnode(io::IO, n::Nothing ) = nothing
-
 
 struct DepthFirst{T}
   tree::BinaryTree{T}
@@ -125,20 +128,9 @@ isempty_node(n) = false
 
 isleaf(a::BinaryTree{T}) where T = (isempty_node(left(a)) && isempty_node(right(a)))
 
-#==
-abstract type Path end
-
-struct ImmutablePath{Node{T}} <: Path
-  v::Vector{PathElement{T}}
-end
-
-struct IndexPath{} end
-==#
-
-const PathElement{T} = Tuple{BinaryTree{T},Symbol}
-const Path{T} = Vector{PathElement{T}}
-#const ReversePath{T} = Reverse{Path{T}}
-const ReversePath{T} = Union{Reverse{Path{T}},Drop{Reverse{Path{T}}}}  # awkward.
+const PathElement{BT} = Tuple{BT,Symbol}
+const Path{BT} = Vector{PathElement{BT}}
+const ReversePath{BT} = Union{Reverse{Path{BT}},Drop{Reverse{Path{BT}}}}  # awkward.
 
 #==== General Traversal ===#
 # Transducers should give better performance than Channel
@@ -295,12 +287,12 @@ search( k::T, tree::BinaryTree{T} ) where T = search(x->key(x)==k, tree)
 """
 path( k::T, tree::BinaryTree{T} ) where T = path(BinarySearch(tree, k))
 path( tree::BinaryTree{T}, k::T ) where T = path(k,tree)
-path( bs::BinarySearch{T} ) where T =  (bs|>∂(collect,PathElement{T}))
+path( bs::BinarySearch{T} ) where T =  (bs|>∂(collect,PathElement{BinaryTree{T}}))
 
 """
   reverse the path from top down to bottom up
 """
-reverse( p::Path{T} ) where T = Reverse(p)
+reverse( p::Path{BT} ) where BT = Reverse(p)
 reverse( bs::BinarySearch{T} ) where T = Reverse(path(bs))
 
 reverse_path = reverse∘path
@@ -318,7 +310,7 @@ insert( ::Type{NotFullTree}, t::N, d::T ) where {T, N<:BinaryTree{T}} =
                                    branch_compare( key(d) ))),
          N(d,empty_node,empty_node))
 
-function insert( ::Type{FullTree}, t::N, d::T ) where {T, N<:Node{T}} 
+function insert( ::Type{FullTree}, t::N, d::T ) where {T, N<:BinaryTree{T}} 
   rpath = reverse_path(BinarySearch(t, 
                                     branch_compare( key(d) )))
 
@@ -336,13 +328,17 @@ insert( t::N, d::T ) where {T, N<:BinaryTree{T}} = insert( fullness(N), t, d )
 """
   rebuild a tree given a path.  path will be created, all other branches preserved
 """
-build( path::Path{T} ) where T =  rbuild( Reverse(path) )
+build( path::Path{BT} ) where BT =  rbuild( Reverse(path) )
 
 rebuild_leaf( ::Type{NotFullTree}, direction::Symbol, parent::N, d::T ) where {N,T} =
   rebuild_node( Val(direction), empty_node, empty_node, parent, d )
 
-function rebuild_leaf( ::Type{FullTree}, direction::Symbol, fatherbrother::N, d::T ) where {N,T}
-  newleaf = rebuild_node( Val(direction), empty_node, empty_node, fatherbrother, d )
+function rebuild_leaf(::Type{FullTree}, 
+                      direction::Symbol, 
+                      fatherbrother::NODE, 
+                      d::T) where {T,NODE<:BinaryTree{T}}
+#  newleaf = rebuild_node( Val(direction), empty_node, empty_node, fatherbrother, d )
+  newleaf = NODE(d)
   twigd = rebuild_parent_data( Val(:both), keyval(newleaf), keyval(fatherbrother), nothing ) 
   # well now, this is incestuous. the last fatherbrother is ignored usually.
   #!me maybe that last fatherbrother should be nothing?  then change rebuild_node to accept Branch there
@@ -355,16 +351,26 @@ rebuild_parent_data(dir,#::Union{Val{:both}, Val{:left}, Val{:right}, Val{:eithe
                     lcd::Union{T,Nothing}, rcd::Union{T,Nothing}, 
                     parent_d::T ) where T = parent_d
 
+#==
 rebuild_parent_data(dir, #::Union{Val{:both}, Val{:left}, Val{:right}, Val{:either}}, 
                     lcd::Union{T,Nothing}, rcd::Union{T,Nothing}, 
                     _::Nothing ) where {T<:Union{AbstractString,Number,AbstractArray}} = internal_nodedata(T)
+==#
+
+# interval tree, called when BinaryTree{Vector{T}} has fullness set to FullTree
+function rebuild_parent_data(Any,
+  lcd::Vector{T},
+  rcd::Vector{T},
+  parent::Union{Nothing, Vector{T}}) where T
+  Vector{T}(sort(vcat(lcd, rcd))[[1,end]])
+end
 
 rebuild_node(::Union{Val{:both}, Val{:left}, Val{:right}}, 
              lc::Branch{T}, rc::Branch{T}, 
              n::Node{T}, d::T ) where T = 
   Node(d, lc, rc) 
 
-function rebuild_node( direction::Symbol, lc::Branch{T}, rc::Branch{T}, n::Node{T} ) where T
+function rebuild_node( direction::Symbol, lc::Branch{T}, rc::Branch{T}, n::BinaryTree{T} ) where T
   d = rebuild_parent_data( Val(direction), keyval(lc), keyval(rc), keyval(n) ) 
   rebuild_node( Val(direction), lc, rc, n, d )
 end
@@ -384,23 +390,23 @@ update(n::Branch{T}) where T = n
   rebuild a tree given a reversed (bottom up) path.  path will be created, all other branches preserved
   to implement a new type of BinaryTree, add a new method with this signature for rebuilding
 """
-function rbuild( rpath::ReversePath{T}, leaf::Branch{T} ) where T
+function rbuild( rpath::ReversePath{BT}, leaf::Branch{T} ) where {T, BT<:BinaryTree{T}}
   reduce((st,(n, direction)) -> rebuild_node( direction, st, n ),
          rpath ;
          init=update(leaf)) 
 end
 
-rbuild( rpath::ReversePath{T} ) where T = rbuild(drop(rpath,1), (first∘first)(rpath))
+rbuild( rpath::ReversePath{BT} ) where BT = rbuild(drop(rpath,1), (first∘first)(rpath))
 
 """
   replace the deepest node in dest path with source subtree
 """
-function replace_node( dest::ReversePath{T}, source::Branch{T} ) where T
+function replace_node( dest::ReversePath{BT}, source::Branch{T} ) where {T, BT<:BinaryTree{T}}
   rpath = drop(dest, 1)
   rbuild(rpath,source)
 end
 
-function delete( rpath::ReversePath{T} ) where T
+function delete( rpath::ReversePath{BT} ) where BT
   node,dir = first(rpath)
   dir == :found || return first(last(rpath)) 
   lc = left(node)

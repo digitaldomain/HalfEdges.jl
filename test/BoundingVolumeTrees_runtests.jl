@@ -24,6 +24,10 @@ const Vector3{T} = SVector{3,T}
   t = tree(["cat", "awnt", "aardvark", "ant", "dog", "dag", "zat", "doog"])
   @test leaves(t, x->length(key(x)) < 4) |> first |> key == "dag"
 
+  it = itree(["cat", "awnt", "aardvark", "ant", "dog", "dag", "zat", "doog"])
+  @test map(data, leaves(it)) == map(data, leaves(t))
+  @test map(data, it) == map(data, t)
+
   build_rosetta( (n, l, r ) ) = Node(n, build_rosetta(l), build_rosetta(r))
   build_rosetta( n::Nothing ) = nothing
   build_rosetta( n::Int ) = Node(n)
@@ -35,6 +39,7 @@ const Vector3{T} = SVector{3,T}
         " 7 4 2 5 1 8 6 9 3"
   @test reduce( *, Traverse(rosetta, nothing, x->string(" ", data(x)), nothing)) ==
         " 7 4 5 2 8 9 6 3 1"
+
 end
 
 @testset "delete" begin
@@ -121,8 +126,10 @@ end
            ([7.5,-1,-1],[7.75,1,1])]
   abba = aabbtree(boxes, tree)
   babba = aabbtree(boxes, avltree)
+  iabba = aabbtree(boxes, itree)
   @test contains((abba |> data |> x->x.aabb), (abba |> left |> data |> x->x.aabb))
   @test contains((abba |> data |> x->x.aabb), (abba |> right |> data |> x->x.aabb))
+  @test Leaves(iabba) |> collect |> x->map(data,x) == Leaves(abba) |> collect |> x->map(data,x) 
   @test contains((babba |> key ), (abba |> left |> key ))
   @test contains((babba |> key ), (abba |> right |> key ))
   hits = query(abba, AABB(Vector3(9.0,-10.0,-10.0),Vector3(20.0,10.0,10.0)))

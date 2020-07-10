@@ -14,7 +14,7 @@ end
 
 AABBNodeData{T,S}() where {T,S} = AABBNodeData{T,S}(AABB{T}(), nothing)
 
-const AABBNode{T,S} = Node{AABBNodeData{T,S}}
+const AABBNode{T,S} = BinaryTree{AABBNodeData{T,S}}
 
 # Traits #
 abstract type QueryTrait  end
@@ -23,7 +23,8 @@ struct SearchTree <: QueryTrait end
 
 key(n::AABBNodeData{T,S}) where {T,S} = n.aabb 
 
-fullness(::Type{Node{AABBNodeData{T,S}}}) where {T,S} = FullTree
+#fullness(::Type{BinaryTree{AABBNodeData{T,S}}}) where {T,S} = FullTree
+fullness(::Type{BT}) where {T, S, A<:AABBNodeData{T,S}, BT<:BinaryTree{A}} = FullTree
 
 query_trait(::Type) = SearchTree()
 query_trait(::Type{<:Node{AABBNodeData{T,S}}}) where {T,S} = IntervalTree()

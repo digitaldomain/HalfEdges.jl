@@ -59,8 +59,8 @@ export
 
 include("Handles.jl")
 
-partial = (f::Function,y...)->(z...)->f(y...,z...)
-∂(f::Function,y...) = partial(f,y...)
+partial = (f::Function, y...)->(z...)->f(y..., z...)
+∂(f::Function,y...) = partial(f, y...)
 second(c) = c[2]
 
 @HandleType HalfEdgeHandle
