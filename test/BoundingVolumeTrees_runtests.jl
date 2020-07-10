@@ -119,11 +119,12 @@ function aabbtree(extents, treebuilder)
   treebuilder(map( ((n,x),i)->AABBNodeData(AABB(n,x),i), extents, 1:length(extents))) 
 end
 
+boxes = [([-4,-1,-1],[-1,1,1]),([1,-1,-1],[4,1,1]),
+         ([2,-1,-1],[3,1,1]), ([-10,-1,-1],[10,1,1]),
+         ([11,-1,-1],[12,1,1]),([7,-1,-1],[8,1,1]),
+         ([7.5,-1,-1],[7.75,1,1])]
+
 @testset "AABBTree" begin
-  boxes = [([-4,-1,-1],[-1,1,1]),([1,-1,-1],[4,1,1]),
-           ([2,-1,-1],[3,1,1]), ([-10,-1,-1],[10,1,1]),
-           ([11,-1,-1],[12,1,1]),([7,-1,-1],[8,1,1]),
-           ([7.5,-1,-1],[7.75,1,1])]
   abba = aabbtree(boxes, tree)
   babba = aabbtree(boxes, avltree)
   iabba = aabbtree(boxes, itree)
@@ -149,3 +150,10 @@ end
   @test contains((t |> left |> data |> getaabb), (t |> left |> right |> data |> getaabb))
 
 end
+
+@testset "leaky" begin
+  @test Traverse(itree([1,3,2,4]), index) |> collect |> sort == [1,2,3,4]
+  alli = Traverse(aabbtree(boxes, itree), index) |> collect |> sort 
+  @test alli == collect(1:length(alli))
+end
+

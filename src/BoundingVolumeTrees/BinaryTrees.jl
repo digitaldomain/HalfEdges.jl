@@ -154,7 +154,7 @@ end
 function traverse(node::Nothing, c::Channel, f...)
 end
 
-Traverse(tree::BinaryTree{T}, pre, post, inorder) where T = Channel() do c
+Traverse(tree::BinaryTree{T}, pre, post = nothing, inorder = nothing) where T = Channel() do c
   traverse(tree, c, pre, post, inorder)
 end
 

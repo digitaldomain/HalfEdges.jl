@@ -1,5 +1,6 @@
 export 
-itree
+itree,
+index
 
 const EmptyIndexedNode = -1
 
@@ -26,6 +27,7 @@ end
 
 parent(n::IndexedNode{T}) where T = n.next
 setparent(n::IndexedNode{T}, iparent) where T = IndexedNode{T}(n.left, n.right, iparent, n.data)
+setnext(n::IndexedNode{T}, inext) where T = setparent(n, inext)
 
 Base.length(nv::NodeVector{T}) where T = length(nv.nodes)
 
@@ -37,6 +39,8 @@ end
 IndexedBinaryTree{T}(d::T, ::Nothing, ::Nothing) where T = itree(d)
 IndexedBinaryTree(d::T) where T = itree(d)
 IndexedBinaryTree{T}(d::T) where T = itree(d)
+
+isroot(t::IndexedBinaryTree{T}) where T = t.nodes.root == t.node
 
 function NodeVector{T}(sz::Int) where T
   nodes = [IndexedNode{T}(EmptyIndexedNode, EmptyIndexedNode, i) for i in vcat(2:sz, EmptyIndexedNode)]
@@ -95,12 +99,6 @@ Base.firstindex(A::NodeVector{T}) where T = A.root
 itree(ibt::IndexedBinaryTree{T}, node::Int) where T = IndexedBinaryTree{T}(ibt.nodes, node)
 itree(a::T) where T = IndexedBinaryTree{T}(NodeVector{T}([IndexedNode(a)], 1, EmptyIndexedNode, 1), 1)
 itree(dc::V) where {T, V<:AbstractVector{T}} = reduce(insert, Iterators.drop(dc,1); init = itree(first(dc)))
-
-#==
-fullness(::Type{IndexedBinaryTree{T}}) where {T} = NotFullTree
-fullness(::Type{IndexedNode{T}}) where {T} = NotFullTree
-fullness(::Type{IndexedBinaryTree{W}}) where {T,W<:WrappedData{T}} = fullness(IndexedNode{T})
-==#
 
 key(tree::IndexedBinaryTree{T}) where T = key(tree.nodes[tree.node].data)
 
@@ -200,16 +198,28 @@ end
 function rebuild_node!(dir::Union{Val{:both}, Val{:left}, Val{:right}}, 
              lc::Branch{T}, rc::Branch{T}, 
              n::IndexedBinaryTree{T}, d::T ) where T
+
   nv = n.nodes
   inode = n.node
   if isnothing(lc)
     ilc = EmptyIndexedNode
-  elseif isleaf(lc)
+  elseif dir != Val{:right}() && isleaf(lc)
     # copy leaf into parents vector
     if nv.nextfree == EmptyIndexedNode
       nv = resize!(nv, length(nv)+2)  # adding two for case of 2 children
     end
-    ilc = nv.nextfree    
+
+    #==
+    #!me possible orphaning? then we need something like this, but then that should looks like
+    #!me else case after this
+    #!me can happen for full trees (:both) or rotations we move a node from this tree to this tree?
+    if !isroot(lc)
+      nv[index(lc)] = setnext(node(lc), nv.nextfree)
+      nv.nextfree = index(lc)
+    end
+    ==#
+
+    ilc = nv.nextfree   # if not new index it will orphan current lc. else nv[index(lc)] = setparent(node(lc), nv.nextfree);  nv.nextfree = index(lc);  # maybe put in free() method
     nv.nextfree = nv[ilc].next
     nv[ilc] = setparent(node(lc), inode)
   else
@@ -220,7 +230,7 @@ function rebuild_node!(dir::Union{Val{:both}, Val{:left}, Val{:right}},
 
   if isnothing(rc)
     irc = EmptyIndexedNode
-  elseif isleaf(rc)
+  elseif dir != Val{:left}() && isleaf(rc)
     # copy leaf into parents vector
     if nv.nextfree == EmptyIndexedNode
       nv = resize!(nv, length(nv)+1)
@@ -245,38 +255,3 @@ rebuild_node(dir::Union{Val{:both}, Val{:left}, Val{:right}},
              n::IndexedBinaryTree{T}, d::T ) where T = 
   rebuild_node!(dir, lc, rc, n, d)
 
-#==
-rebuild_leaf( ::Type{NotFullTree}, direction::Symbol, parent::N, d::T ) where {N,T} =
-  rebuild_node( Val(direction), empty_node, empty_node, parent, d )
-
-function rebuild_leaf( ::Type{FullTree}, direction::Symbol, fatherbrother::N, d::T ) where {N,T}
-  newleaf = rebuild_node( Val(direction), empty_node, empty_node, fatherbrother, d )
-  twigd = rebuild_parent_data( Val(:both), keyval(newleaf), keyval(fatherbrother), nothing ) 
-  # well now, this is incestuous. the last fatherbrother is ignored usually.
-  #!me maybe that last fatherbrother should be nothing?  then change rebuild_node to accept Branch there
-  #!me might result in ambiguous dispatch for wrapped type?
-  twig = rebuild_node(Val(:both), newleaf, fatherbrother, fatherbrother, twigd)
-end
-==#
-
-#==
-rebuild_node(::Union{Val{:both}, Val{:left}, Val{:right}}, 
-             lc::Nothing, rc::Nothing, 
-             n::IndexedBinaryTree{T}, d::T ) where T =
-  n.nodes
-
-rebuild_node(::Union{Val{:both}, Val{:left}, Val{:right}}, 
-             lc::IndexedBinaryTree{T}, rc::Nothing, 
-             n::IndexedBinaryTree{T}, d::T ) where T =
-  resize( 
-
-rebuild_node(::Union{Val{:both}, Val{:left}, Val{:right}}, 
-             lc::Nothing, rc::Nothing, 
-             n::IndexedBinaryTree{T}, d::T ) where T =
-  itree(d) 
-
-rebuild_node(::Union{Val{:both}, Val{:left}, Val{:right}}, 
-             lc::Nothing, rc::Nothing, 
-             n::IndexedBinaryTree{T}, d::T ) where T =
-  itree(d) 
-  ==#
