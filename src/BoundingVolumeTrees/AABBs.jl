@@ -49,6 +49,7 @@ function refit( aabb::AABB{T} ) where T
 end
 
 randAABB(r = 0:0.001:1) = refit(AABB(rand(r), rand(r), rand(r), rand(r), rand(r), rand(r)))
+Base.rand(::Type{AABB{Float64}}) = randAABB()
 
 """
 """

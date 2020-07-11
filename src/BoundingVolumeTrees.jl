@@ -7,9 +7,10 @@ const Vector3 = Point
 
 # some WIP tree structures intended to replace the older DynamicAABBTree
 include("BoundingVolumeTrees/BinaryTrees.jl")
+include("BoundingVolumeTrees/IndexedBinaryTrees.jl") 
+include("BoundingVolumeTrees/BalancedTrees.jl")
 include("BoundingVolumeTrees/AABBs.jl")
 include("BoundingVolumeTrees/AABBTrees.jl")
-include("BoundingVolumeTrees/IndexedBinaryTrees.jl")
 
 #!me this one is optimized, but lacking features like balancing
 #!me also the design is a bit grim

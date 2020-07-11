@@ -444,6 +444,7 @@ tree( d::T ) where T = Node(d,empty_node,empty_node)
 
 tree( dc::Vector{T} ) where T = reduce(insert,rest(dc); init = tree(first(dc)))
 
+#==
 function rotate_right( parent::Node{T} ) where T
   child = left(parent)
   Node(data(child), left(child), Node(data(parent), right(child), right(parent)))
@@ -453,8 +454,19 @@ function rotate_left( parent::Node{T} ) where T
   child = right(parent)
   Node(data(child), Node(data(parent), left(parent), left(child)), right(child))
 end
+==#
+
+function rotate_right( parent::N ) where {T, N<:BinaryTree{T}}
+  child = left(parent)
+  rebuild_node(:right, left(child), rebuild_node(:left, right(child), right(parent), parent), child)
+  #Node(data(child), left(child), Node(data(parent), right(child), right(parent)))
+end
+
+function rotate_left( parent::N ) where {T, N<:BinaryTree{T}}
+  child = right(parent)
+  rebuild_node(:left, rebuild_node(:right, left(parent), left(child), parent), right(child), child)
+  #Node(data(child), Node(data(parent), left(parent), left(child)), right(child))
+end
 
 update( t::BinaryTree{T}, data::T, newdata::T ) where T = insert(delete(t, key(data)), newdata)
-
-include("BalancedTrees.jl")
 

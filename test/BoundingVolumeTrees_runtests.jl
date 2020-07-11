@@ -61,8 +61,10 @@ end
 
   linear255 = tree(1:255|>collect)
   balanced255 = avltree(1:255|>collect)
+  ibalanced255 = avlitree(1:255|>collect)
   @test height(linear255) == 255
   @test height(balanced255) == 7
+  @test height(ibalanced255) == 7
 
   b15 = avltree(1:15|>collect)
   sb15 = reduce((t,i)->delete(t,i),[6];init=b15)|>left|>right
@@ -128,9 +130,11 @@ boxes = [([-4,-1,-1],[-1,1,1]),([1,-1,-1],[4,1,1]),
   abba = aabbtree(boxes, tree)
   babba = aabbtree(boxes, avltree)
   iabba = aabbtree(boxes, itree)
+#  biabba = aabbtree(boxes, avlitree)
   @test contains((abba |> data |> x->x.aabb), (abba |> left |> data |> x->x.aabb))
   @test contains((abba |> data |> x->x.aabb), (abba |> right |> data |> x->x.aabb))
   @test Leaves(iabba) |> collect |> x->map(data,x) == Leaves(abba) |> collect |> x->map(data,x) 
+#  @test Leaves(biabba) |> collect |> x->map(data,x) == Leaves(babba) |> collect |> x->map(data,x) 
   @test contains((babba |> key ), (abba |> left |> key ))
   @test contains((babba |> key ), (abba |> right |> key ))
   hits = query(abba, AABB(Vector3(9.0,-10.0,-10.0),Vector3(20.0,10.0,10.0)))

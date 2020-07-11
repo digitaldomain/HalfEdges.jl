@@ -629,6 +629,8 @@ end
 approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
 
 function winding_number_cache(topo, P)
+  #slop = reduce(max,reduce(max,P)-reduce(min,P))*sloppercent
+  itree(map( (polyind, i)->AABBNodeData(AABB(P[polyind]), i), polygons(topo), 1:length(polygons(topo)))) 
 end
 
 """
