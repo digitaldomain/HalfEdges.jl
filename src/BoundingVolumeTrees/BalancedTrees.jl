@@ -105,14 +105,16 @@ function balance( st::NODE, trait::AVLBalanced ) where {T, NODE<:AVLNode{T}}
       rotate_right(st)
     else
       # right child heavy
-      rotate_right(NODE(data(st), rotate_left(left(st)), right(st)))
+      #rotate_right(NODE(data(st), rotate_left(left(st)), right(st)))
+      rotate_right(rebuild_node(:left, rotate_left(left(st)), right(st), st))
     end
   elseif scale < -1
     # right heavy
     subscale = weigh(left(st))
     if subscale > 0
       # left child heavy
-      rotate_left(NODE(data(st), left(st), rotate_right(right(st))))
+      #rotate_left(NODE(data(st), left(st), rotate_right(right(st))))
+      rotate_left(rebuild_node(:right, left(st), rotate_right(right(st)), st))
     else
       # right child heavy
       rotate_left(st)
@@ -172,7 +174,7 @@ function rebuild_node(dir::Val{:both},
                       rc::Branch{AVLData{T}}, 
                       n::IndexedBinaryTree{AVLData{T}}, d::T ) where {T}
   avldata = AVLData{T}(d, max(height(lc), height(rc))+1)
-  balance(rebuild_node!(dir, avldata, lc, rc, n, avldata))
+  balance(rebuild_node!(dir, lc, rc, n, avldata))
 end
 
 
