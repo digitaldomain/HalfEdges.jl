@@ -7,7 +7,8 @@ avltree,
 avlitree,
 avldata,
 weigh,
-height
+height,
+balance
 #build_wrapped_node
 
 abstract type BalanceTrait end
@@ -110,7 +111,7 @@ function balance( st::NODE, trait::AVLBalanced ) where {T, NODE<:AVLNode{T}}
     end
   elseif scale < -1
     # right heavy
-    subscale = weigh(left(st))
+    subscale = weigh(right(st))
     if subscale > 0
       # left child heavy
       #rotate_left(NODE(data(st), left(st), rotate_right(right(st))))
