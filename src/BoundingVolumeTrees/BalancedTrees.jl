@@ -8,7 +8,8 @@ avlitree,
 avldata,
 weigh,
 height,
-balance
+balance,
+maxheight
 #build_wrapped_node
 
 abstract type BalanceTrait end
@@ -48,6 +49,9 @@ avltree( dc::Vector{T} ) where T = tree( AVLData.(dc) )
 avldata( kv::T ) where T = AVLData(kv)
 avlitree( d::T ) where T = itree( AVLData(d) )
 avlitree( dc::Vector{T} ) where T = itree( AVLData.(dc) )
+
+""" maximum height of avltree with n leaves """
+maxheight(n) = 1.440*log(2,n+1.065) - 0.328
 
 function rotate_right( c::N ) where {T, N<:AVLNode{T}}
   b = left(c)

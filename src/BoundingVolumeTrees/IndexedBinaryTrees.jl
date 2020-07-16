@@ -23,6 +23,7 @@ mutable struct NodeVector{T}
   root::Int
   nextfree::Int
   last::Int
+  #nextfreeleaf::Int  # can optionally reserve first block of indexes for leaves.  Enables direct indexing
 end
 
 parent(n::IndexedNode{T}) where T = n.next
@@ -51,6 +52,8 @@ index(tree::IndexedBinaryTree{T}) where T = tree.node
 node(tree::IndexedBinaryTree{T}) where T = tree.nodes[tree.node]
 
 root(tree::IndexedBinaryTree{T}) where T = IndexedBinaryTree{T}(tree.nodes, tree.nodes.root)
+
+Base.getindex(A::IndexedBinaryTree{T}, i::Number) where {T} = IndexedBinaryTree{T}(A.nodes, i)
 
 
 function resize( nv::NodeVector{T}, sz::Int ) where T
@@ -86,10 +89,34 @@ function resize!( nv::NodeVector{T}, sz::Int ) where T
   nv.nodes[oldsz+1:sz] = newnodes
   lastn = nv.nodes[nv.last]
   nv.nodes[nv.last] = IndexedNode{T}(lastn.left, lastn.right, oldsz+1, lastn.data)
-  nv.nextfree = oldsz+1
+
+  if nv.nextfree == EmptyIndexedNode
+    nv.nextfree = oldsz+1
+  end
+
   nv.last = sz
   return nv
 end
+
+"""
+    reserve_leaves!(nv, n) 
+
+For internal use.
+reserve the next n nodes for allocating to leave in order of insertion
+
+this allows direct indexing of leaves with implicit in-order indices
+uses any exising free nodes, so if those aren't ordered then this will not be true
+"""
+#==
+function reserve_leaves!( nv::NodeVector{T}, n:Int ) where T
+  nv.nextfreeleaf = nv.last
+  oldsz = length(nv.nodes)
+  resize!(nv, n+oldsz+1)
+  nv.nextfree = n
+  nv.nodes[nv.nextfreeleaf+n-1].next = EmptyIndexedNode
+   
+end
+==#
 
 Base.size(A::NodeVector{T}) where T = size(A.nodes)
 Base.getindex(A::NodeVector{T}, i::Number) where {T} = A.nodes[i]

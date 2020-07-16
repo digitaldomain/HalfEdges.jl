@@ -5,7 +5,10 @@ contains,
 inflate,
 volume,
 refit,
-randAABB
+randAABB,
+centre,
+radius,
+radius_squared
 
 using Base.Iterators
 using LinearAlgebra
@@ -87,5 +90,17 @@ end
 
 function volume(a::AABB{T}) where {T}
   @inbounds @fastmath r = (a.max[1]-a.min[1])*(a.max[2]-a.min[2])*(a.max[3]-a.min[3]); r
+end
+
+function centre(a::AABB{T}) where {T}
+  @inbounds @fastmath (a.max+a.min)*T(0.5)
+end
+
+function radius(a::AABB{T}) where {T}
+  @inbounds @fastmath norm(a.max-a.min)*T(0.5)
+end
+
+function radius_squared(a::AABB{T}) where {T}
+  @inbounds @fastmath LinearAlgebra.norm_sqr(a.max-a.min)*T(0.5)
 end
 

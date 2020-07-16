@@ -22,6 +22,7 @@ Branch,
 Leaves,
 BinaryTree,
 Traverse,
+TraverseWhen,
 DepthFirst,
 BreadthFirst,
 BinarySearch,
@@ -46,7 +47,8 @@ reverse_path,
 replace_node,
 delete,
 update,
-fullness
+fullness,
+minheight
 
 using Base.Iterators
 using Base.Iterators:Reverse
@@ -156,6 +158,33 @@ end
 
 Traverse(tree::BinaryTree{T}, pre, post = nothing, inorder = nothing) where T = Channel() do c
   traverse(tree, c, pre, post, inorder)
+end
+
+function traversewhen(when::Function, node::BinaryTree{T}, c::Channel, pre, post, inorder) where T
+  if !when(node)
+    return
+  end
+
+  if pre != nothing
+    push!(c, pre(node))
+  end
+
+  traversewhen(when, left(node), c, pre, post, inorder)
+  if inorder != nothing
+    push!(c, inorder(node))
+  end
+
+  traversewhen(when, right(node), c, pre, post, inorder)
+  if post != nothing
+    push!(c, post(node))
+  end
+end
+
+function traversewhen(when::Function, node::Nothing, c::Channel, f...)
+end
+
+TraverseWhen(when, tree::BinaryTree{T}, pre, post = nothing, inorder = nothing) where T = Channel() do c
+  traversewhen(when, tree, c, pre, post, inorder)
 end
 
 
@@ -470,3 +499,5 @@ end
 
 update( t::BinaryTree{T}, data::T, newdata::T ) where T = insert(delete(t, key(data)), newdata)
 
+""" minimum height of a binary tree with n leaves """
+minheight(n) = log(2,n)+1
