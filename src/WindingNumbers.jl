@@ -14,7 +14,7 @@ function solid_angle(topo::Topology, P::TA, h::HalfEdgeHandle, p::T) where {T, T
   b = P[head(topo, next(topo, h))] - p
   c = P[head(topo, next(topo, next(topo, h)))] - p
   aa = norm(a); bb = norm(b); cc = norm(c)
-  2.0*atan(det(hcat(a,b,c)), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb) 
+  2.0*atan(det(hcat(a,b,c)), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb)
 end
 
 #=== some tensor stuff ===#
@@ -100,14 +100,12 @@ end
 
 assumes triangle mesh.  approximate winding number function for a cluster of triangles
 """
-function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=3)
+function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=2)
 
-  #Pees = unique(mapreduce(partial(vertices, topo), vcat, F; init=[]))
-  #p̃ = sum(P[Pees])/length(Pees)
   p̃ = centroid(topo, P, F)
 
   #!me check https://github.com/alecjacobson/WindingNumber/blob/master/UT_SolidAngle.cpp 
-  #!me says we need to use NORMALIZED normal to multiply integrals by
+  #!me says we need to use NORMALIZED normal to multiply integrals by, paper says otherwise...
   ant = map(partial(weightednormal, topo, P), F)
 
   term1 = sum(ant)
@@ -135,6 +133,11 @@ end
 
 approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
 
+function approx_winding_number(topo, P, q, node::BT) where {BT<:BinaryTree}
+  F = Leaves(node) |> collect |> c->map(value∘data,c)
+  approx_winding_number(topo, P, map(i->halfedge(topo, FaceHandle(i)), F))(q)
+end
+
 struct WindingNumberCache
   bvh  
   W
@@ -145,7 +148,7 @@ end
 
 WindingNumberCache(a,b,c) = WindingNumberCache(a, b, c, 2.0)
 
-function winding_number_cache(topo, P, tris_for_brute = 200)
+function winding_number_cache(topo, P, tris_for_brute = 200, order=2)
   aabbs = map((Fᵢ, i)->AABBNodeData(AABB(P[Fᵢ]), i), polygons(topo), 1:nfaces(topo))
   bt = avlitree(map( (Fᵢ, i)->AABBNodeData(AABB(P[Fᵢ]), i), polygons(topo), 1:nfaces(topo)))
 
@@ -157,11 +160,11 @@ function winding_number_cache(topo, P, tris_for_brute = 200)
 
   lc = TraverseWhen(n->height(n) >= height_for_approx, bt, Leaves)
   
-  faceh(n) = n |> data |> value |> i->face(topo, HalfEdgeHandle(i))
+  faceheh(n) = n |> data |> value |> i->halfedge(topo, FaceHandle(i))
   W = Function[]
   resize!(W, nnodes)
   W[ TraverseWhen(n->height(n) >= height_for_approx, bt, index) |> collect ] = 
-    [ approx_winding_number(topo, P, map(faceh, lcᵢ)) for lcᵢ in lc ]
+    [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
 
   WindingNumberCache(bt, W, height_for_approx)
 end
@@ -176,7 +179,6 @@ end
 
 function winding_number(topo, P, q, node, β², cache)
   if height(node) < cache.height_cutoff
-    #return mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, Leaves(node))
     return winding_number(topo, P, q, node)
   else
     aabb = key(node)
@@ -193,5 +195,8 @@ function winding_number(topo, P, q, node, β², cache)
 end
 
 function winding_number(topo, P, q, node::BT) where {BT<:BoundingVolumeTrees.BinaryTree}
-  mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, Leaves(node))
+  mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, Leaves(node))/(4.0π)
 end
+
+winding_number(topo, P, q) = mapreduce(i->solid_angle(topo, P, i, q), +, faces(topo))/(4.0π)
+

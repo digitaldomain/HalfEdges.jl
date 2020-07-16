@@ -281,6 +281,16 @@ end
 
   # outside, accuracy seems lower for some reason
   @test abs(sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), P[1]-centre), Fi))) < 1e6 
+
+  cache = winding_number_cache(topo, P, 1)
+  cache3 = winding_number_cache(topo, P, 1, 3)
+
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache) |> round == 0
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache3) |> round == 0
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache.bvh) |> round == 0
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0)) |> round == 0
+  @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5), cache) |> round == 1 
+  @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5)) |> round == 1 
 end
 
 @testset "load a mesh" begin

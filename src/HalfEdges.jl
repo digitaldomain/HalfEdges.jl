@@ -58,6 +58,7 @@ export
   polygons,
   face,
   halfedge,
+  vertices,
   winding_number,
   winding_number_cache
 
