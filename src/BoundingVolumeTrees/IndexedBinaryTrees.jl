@@ -1,6 +1,9 @@
 export 
+IndexedBinaryTree,
 itree,
-index
+index,
+ileaves,
+itraversewhen
 
 const EmptyIndexedNode = -1
 
@@ -25,6 +28,9 @@ mutable struct NodeVector{T}
   last::Int
   #nextfreeleaf::Int  # can optionally reserve first block of indexes for leaves.  Enables direct indexing
 end
+
+isleaf(n::IndexedNode{T}) where T = EmptyIndexedNode == n.left && 
+                                    EmptyIndexedNode == n.right
 
 parent(n::IndexedNode{T}) where T = n.next
 setparent(n::IndexedNode{T}, iparent) where T = IndexedNode{T}(n.left, n.right, iparent, n.data)
@@ -55,6 +61,81 @@ root(tree::IndexedBinaryTree{T}) where T = IndexedBinaryTree{T}(tree.nodes, tree
 
 Base.getindex(A::IndexedBinaryTree{T}, i::Number) where {T} = IndexedBinaryTree{T}(A.nodes, i)
 
+function ileaves(t::IndexedBinaryTree{T}) where T
+  L = Vector{IndexedNode{T}}(undef, (length(t.nodes)>>1)+1)
+  resize!(L, 0);
+  ileaves(t.nodes, t.node, L);
+  return L
+end
+
+function ileaves( n::NodeVector{T}, i::Int, L::Vector{IndexedNode{T}} ) where T
+  nc = 0
+  if n.nodes[i].left != EmptyIndexedNode
+    nc = 1
+    ileaves(n, n.nodes[i].left, L)
+  end
+  if n.nodes[i].right != EmptyIndexedNode
+    nc += 1
+    ileaves(n, n.nodes[i].right, L)
+  end
+
+  if nc == 0
+    push!(L, n.nodes[i])
+  end
+end
+
+
+function itraversewhen(when::Function, node::IndexedBinaryTree{T}, L::Vector{R}, 
+                       pre::Union{Function, Nothing}, 
+                       post::Union{Function, Nothing}, 
+                       inorder::Union{Function, Nothing}) where {T, R}
+  if !when(node)
+    return
+  end
+
+  if pre != nothing
+    push!(L, pre(node))
+  end
+
+  node.nodes[node.node].left != EmptyIndexedNode && itraversewhen(when, left(node), L, pre, post, inorder)
+
+  if inorder != nothing
+    push!(L, inorder(node))
+  end
+
+  node.nodes[node.node].right != EmptyIndexedNode && itraversewhen(when, right(node), L, pre, post, inorder)
+  if post != nothing
+    push!(L, post(node))
+  end
+end
+
+function itraversewhen(when::Function, t::IndexedBinaryTree{T}, returnType::Type, 
+                       pre, post, inorder = nothing) where T
+  L = Vector{returnType}(undef, length(t.nodes))
+  resize!(L, 0);
+  itraversewhen(when, t, L, pre, post, inorder);
+  return L
+end
+
+function itraversewhen(when::Function, node::IndexedBinaryTree{T}, L::Vector{R}, 
+                       pre::Function) where {T, R}
+  if !when(node)
+    return
+  end
+
+  push!(L, pre(node))
+
+  node.nodes[node.node].left != EmptyIndexedNode && itraversewhen(when, left(node), L, pre)
+  node.nodes[node.node].right != EmptyIndexedNode && itraversewhen(when, right(node), L, pre)
+end
+
+function itraversewhen(when::Function, t::IndexedBinaryTree{T}, returnType::Type, 
+                       pre::Function ) where T
+  L = Vector{returnType}(undef, length(t.nodes))
+  resize!(L, 0);
+  itraversewhen(when, t, L, pre);
+  return L
+end
 
 function resize( nv::NodeVector{T}, sz::Int ) where T
   oldsz = length(nv.nodes)
@@ -140,6 +221,8 @@ isempty_node(i::Int) = i == EmptyIndexedNode
 
 data(tree::IndexedBinaryTree{T}) where T = tree.nodes[tree.node].data
 keyval(tree::IndexedBinaryTree{T}) where T = data(tree)
+data(n::IndexedNode{T}) where T = n.data
+keyval(n::IndexedNode{T}) where T = n.data
 
 function search(stree::IndexedBinaryTree{T}, k::T) where T
   hit = nothing

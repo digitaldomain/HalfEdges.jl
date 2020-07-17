@@ -134,15 +134,15 @@ end
 approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
 
 function approx_winding_number(topo, P, q, node::BT) where {BT<:BinaryTree}
-  F = Leaves(node) |> collect |> c->map(value∘data,c)
+  F = ileaves(node) |> collect |> c->map(value∘data,c)
   approx_winding_number(topo, P, map(i->halfedge(topo, FaceHandle(i)), F))(q)
 end
 
 struct WindingNumberCache
-  bvh  
-  W
-  height_cutoff
-  β
+  bvh::IndexedBinaryTree{AVLData{AABBNodeData{Float64,Int64}}}
+  W::Vector{Function}
+  height_cutoff::Int64
+  β::Float64
   WindingNumberCache(a,b,c,d) = new(a,b,c,d)
 end
 
@@ -155,16 +155,21 @@ function winding_number_cache(topo, P, tris_for_brute = 200, order=2)
   # threshold for when we generate approx w
   height_for_approx = (minheight(tris_for_brute) + maxheight(tris_for_brute))/2 |> Int∘round
 
-  nnodes = mapreduce(index, max, TraverseWhen(n->height(n) >= height_for_approx, bt, identity))
+  #nnodes = mapreduce(index, max, TraverseWhen(n->height(n) >= height_for_approx, bt, identity))
+  nnodes = mapreduce(index, max, itraversewhen(n->height(n) >= height_for_approx, bt, eltype(bt), identity))
   F = polygons(topo)
 
-  lc = TraverseWhen(n->height(n) >= height_for_approx, bt, Leaves)
+#  lc = TraverseWhen(n->height(n) >= height_for_approx, bt, Leaves)
+  lc = TraverseWhen(n->height(n) >= height_for_approx, bt, ileaves)
   
   faceheh(n) = n |> data |> value |> i->halfedge(topo, FaceHandle(i))
   W = Function[]
   resize!(W, nnodes)
   W[ TraverseWhen(n->height(n) >= height_for_approx, bt, index) |> collect ] = 
     [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
+
+#  W[ itraversewhen(n->height(n) >= height_for_approx, bt, Int, index) ] = 
+#    [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
 
   WindingNumberCache(bt, W, height_for_approx)
 end
@@ -177,7 +182,7 @@ function winding_number(topo, P, q, cache::WindingNumberCache)
   winding_number(topo, P, q, node, β², cache)
 end
 
-function winding_number(topo, P, q, node, β², cache)
+function winding_number(topo, P, q, node::BT, β²::Float64, cache) where {T, BT<:IndexedBinaryTree{T}}
   if height(node) < cache.height_cutoff
     return winding_number(topo, P, q, node)
   else
@@ -185,18 +190,37 @@ function winding_number(topo, P, q, node, β², cache)
     p = centre(aabb)
     r = radius_squared(aabb)
     if LinearAlgebra.norm_sqr(q - p) > β²*r
+      #println("WHATUP")
       return cache.W[index(node)](q)
     else
       # descend 
+      #println("crazy!!!")
       return winding_number(topo, P, q, left(node), β², cache) +
         winding_number(topo, P, q, right(node), β², cache)
     end
   end
 end
 
-function winding_number(topo, P, q, node::BT) where {BT<:BoundingVolumeTrees.BinaryTree}
-  mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, Leaves(node))/(4.0π)
+function winding_number(topo, P, q, node::BT) where {T, BT<:BinaryTree{T}}
+  mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, ileaves(node))/(4.0π)
 end
 
 winding_number(topo, P, q) = mapreduce(i->solid_angle(topo, P, i, q), +, faces(topo))/(4.0π)
+
+"""
+    winding_numbers(topo, P::V; jiggle = ϵ)
+
+The winding number for each vertex of a mesh.  
+A vertex is lifted slightly off the surface in the normal direction to give winding number of 0 for vertices on the surface, but otherwise on exterior of the mesh.
+The amount of normal lifting is controlled with the jiggle parameter 
+"""
+function winding_numbers(topo, P::V; jiggle = eps(T), approx=false ) where {T, PT<:AbstractVector{T}, V<:AbstractVector{PT}}
+  if approx
+    #!me fast winding numbers are anything but atm. some serious performance issue we need to investigate
+    cache = winding_number_cache(topo, P)
+    map( q->winding_number(topo, P, q, cache), P+vertexnormals(topo, P)*jiggle)
+  else
+    map( q->winding_number(topo, P, q), P+vertexnormals(topo, P)*jiggle)
+  end
+end
 

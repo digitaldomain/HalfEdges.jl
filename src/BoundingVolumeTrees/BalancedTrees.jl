@@ -3,6 +3,7 @@ AVLData,
 BalancedTree,
 BalanceData,
 AVLTree,
+AVLData,
 avltree,
 avlitree,
 avldata,
@@ -26,18 +27,10 @@ end
 
 wrapped_data(n::AVLData{T}) where T = n.kv
 
-#==
-build_wrapped_node(::Type{W},d::T) where {W<:WrappedData,T} = Node(W(d), empty_node,empty_node)
-build_wrapped_node(::Type{T},d::T) where {T} = Node(d, empty_node,empty_node)
-build_wrapped_node(::Type{W},d::T, l, r) where {W<:WrappedData,T} = Node(W(d), l, r)
-build_wrapped_node(::Type{T},d::T, l, r) where {T} = Node(d, l, r)
-==#
-
 AVLData(kv::T, h::S) where {T,S<:Integer} = AVLData(kv,Int32(h))
 AVLData(kv::T) where T = AVLData(kv,Int32(0))
 AVLData{T}(kv::T) where T = AVLData(kv,Int32(0))
 
-#const AVLNode{T} = Node{AVLData{T}}
 const AVLNode{T} = Union{Node{AVLData{T}}, IndexedBinaryTree{AVLData{T}}}
 
 balance_trait(::Type) = Unbalanced()
@@ -57,44 +50,20 @@ function rotate_right( c::N ) where {T, N<:AVLNode{T}}
   b = left(c)
   indata = rebuild_parent_data( Val(:either), keyval(right(b)), keyval(right(c)), keyval(c) ) 
   cdata = AVLData(indata, height(right(b),right(c)))
-  #c = NODE(cdata,right(b),right(c))
   c = rebuild_node(Val(:left), right(b), right(c), c, cdata)
 
   indata = rebuild_parent_data( Val(:either), keyval(left(b)), keyval(c), keyval(b) ) 
-  #NODE(AVLData(indata, height(left(b),c)), left(b), c)
   rebuild_node(Val(:right), left(b), c, b, AVLData(indata, height(left(b),c)))
 end
 
 function rotate_left( c::N ) where {T, N<:AVLNode{T}}
   b = right(c)
   indata = rebuild_parent_data( Val(:either), keyval(left(c)), keyval(left(b)), keyval(c) ) 
-  #c = NODE(AVLData(indata, height(left(c),left(b))),left(c),left(b))
   c = rebuild_node(Val(:right), left(c), left(b), c, AVLData(indata, height(left(c),left(b))))
 
   indata = rebuild_parent_data( Val(:either), keyval(c), keyval(right(b)), keyval(b) ) 
-  #NODE(AVLData(indata, height(c,right(b))), c, right(b))
   rebuild_node(Val(:left), c, right(b), b, AVLData(indata, height(c,right(b))))
 end
-#==
-function rotate_right( c::NODE ) where {T, NODE<:AVLNode{T}}
-  b = left(c)
-  indata = rebuild_parent_data( Val(:either), keyval(right(b)), keyval(right(c)), keyval(c) ) 
-  cdata = AVLData(indata, height(right(b),right(c)))
-  c = NODE(cdata,right(b),right(c))
-
-  indata = rebuild_parent_data( Val(:either), keyval(left(b)), keyval(c), keyval(b) ) 
-  NODE(AVLData(indata, height(left(b),c)), left(b), c)
-end
-
-function rotate_left( c::NODE ) where {T, NODE<:AVLNode{T}}
-  b = right(c)
-  indata = rebuild_parent_data( Val(:either), keyval(left(c)), keyval(left(b)), keyval(c) ) 
-  c = NODE(AVLData(indata, height(left(c),left(b))),left(c),left(b))
-
-  indata = rebuild_parent_data( Val(:either), keyval(c), keyval(right(b)), keyval(b) ) 
-  NODE(AVLData(indata, height(c,right(b))), c, right(b))
-end
-==#
 
 balance( n::T ) where T = balance( n, balance_trait(T) ) 
 
@@ -110,7 +79,6 @@ function balance( st::NODE, trait::AVLBalanced ) where {T, NODE<:AVLNode{T}}
       rotate_right(st)
     else
       # right child heavy
-      #rotate_right(NODE(data(st), rotate_left(left(st)), right(st)))
       rotate_right(rebuild_node(:left, rotate_left(left(st)), right(st), st))
     end
   elseif scale < -1
@@ -118,7 +86,6 @@ function balance( st::NODE, trait::AVLBalanced ) where {T, NODE<:AVLNode{T}}
     subscale = weigh(right(st))
     if subscale > 0
       # left child heavy
-      #rotate_left(NODE(data(st), left(st), rotate_right(right(st))))
       rotate_left(rebuild_node(:right, left(st), rotate_right(right(st)), st))
     else
       # right child heavy
@@ -156,8 +123,6 @@ end
 
 
 
-
-
 function rebuild_node(dir::Val{:left}, 
                       lc::Branch{AVLData{T}}, 
                       rc::Branch{AVLData{T}}, 
@@ -181,8 +146,6 @@ function rebuild_node(dir::Val{:both},
   avldata = AVLData{T}(d, max(height(lc), height(rc))+1)
   balance(rebuild_node!(dir, lc, rc, n, avldata))
 end
-
-
 
 
 

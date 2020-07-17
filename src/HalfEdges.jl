@@ -60,6 +60,7 @@ export
   halfedge,
   vertices,
   winding_number,
+  winding_numbers,
   winding_number_cache
 
 include("Handles.jl")
@@ -512,7 +513,7 @@ end
 return the vertices on the inside of a set of overlapping tris
 """
 function inside_verts(topo, P, overlaptris::Tuple{HalfEdgeHandle, HalfEdgeHandle})
-#  W, height_cutoff = winding_number_cache(topo, P)
+  #cache = winding_number_cache(topo, P)
 
 end
 
