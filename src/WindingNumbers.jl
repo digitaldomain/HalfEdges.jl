@@ -1,3 +1,5 @@
+det22(a,b,c,d) = a*d-c*b
+det33(a,b,c) = @inbounds a[1]*det22(b[2],c[2],b[3],c[3]) - b[1]*det22(a[2],c[2],a[3],c[3]) + c[1]*det22(a[2],b[2],a[3],b[3])
 
 """
   solid_angle(topo, P, he, p)
@@ -10,11 +12,11 @@ function solid_angle(topo::Topology, P::TA, h::HalfEdgeHandle, p::T) where {T, T
     return 0.0
   end
 
-  a = P[head(topo, h)] - p
-  b = P[head(topo, next(topo, h))] - p
-  c = P[head(topo, next(topo, next(topo, h)))] - p
+  @inbounds a = P[head(topo, h)] - p
+  @inbounds b = P[head(topo, next(topo, h))] - p
+  @inbounds c = P[head(topo, next(topo, next(topo, h)))] - p
   aa = norm(a); bb = norm(b); cc = norm(c)
-  2.0*atan(det(hcat(a,b,c)), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb)
+  2.0*atan(det33(a,b,c), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb)
 end
 
 #=== some tensor stuff ===#
@@ -74,14 +76,14 @@ end
 function ∇²G(q,x)
   r = x-q
   rlen = norm(r)
-  I/(4.0π*rlen^3) - 3.0*Array(r⊗r)/(4.0π*rlen^5)
+  I/(4.0π*rlen^3) - 3.0*(r*r')/(4.0π*rlen^5)
 end
 
+# literally from the paper, lots of 0*0 happening and that ⊗ is brutal slow
+# likely we wont actually use this third order expansion, so don't worry about optz right now
 function ∇³G(q,x)
   r = x-q
   rlen = norm(r)
-  # literally from the paper, lots of 0*0 happening
-  # likely we wont actually use this third order expansion, so don't worry about optz right now
   Array(sum(map(eᵢ->r⊗eᵢ⊗eᵢ + eᵢ⊗r⊗eᵢ + eᵢ⊗eᵢ⊗r, [SVector(1.0,0.0,0.0),
                                                   SVector(0.0,1.0,0.0),
                                                   SVector(0.0,0.0,1.0)])))/(-4.0π*rlen^5) + 
@@ -94,6 +96,22 @@ function centroid(topo, P,  F::Vector{HalfEdgeHandle})
 end
 
 # triangle integrals from appendix B of "Fast Winding Numbers for Soups and Clouds"
+
+struct ApproxWindingNumber2
+  p̃::SVector{3, Float64}
+  term1::SVector{3, Float64}
+  term2::SMatrix{3,3, Float64}
+end
+
+struct ApproxWindingNumber3
+  p̃::SVector{3, Float64}
+  term1::SVector{3, Float64}
+  term2::SMatrix{3,3, Float64}
+  term3::Array{Float64, 3}
+end
+
+approx_winding_number(awn::ApproxWindingNumber2, 
+                      q::SVector{3,Float64}) = awn.term1⋅∇G(q, awn.p̃) + awn.term2⋅∇²G(q, awn.p̃)
 
 """
     approx_winding_number(topo, P, F, order=3)
@@ -111,8 +129,9 @@ function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=2)
   term1 = sum(ant)
   term2 = map(zip(ant, F)) do (antᵢ, heh)
     (sum(P[vertices(topo, heh)])/3.0 - p̃)⊗antᵢ
-  end |> sum |> Array
+  end |> sum |> SMatrix{3,3}∘Array
 
+  # very inefficient, but order 2 seems good enough, so don't worry about it for now
   if order == 3
     term3 = map(zip(ant, F)) do (antᵢ, heh)
       xᵢ, xⱼ, xk = P[vertices(topo, heh)]
@@ -122,13 +141,16 @@ function approx_winding_number(topo, P, F::Vector{HalfEdgeHandle}, order=2)
       Ct⊗antᵢ
     end |> sum |> partial(*, 1.0/6.0) |> Array
 
-    w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃) + term3⋅∇³G(q, p̃)
+  #  w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃) + term3⋅∇³G(q, p̃)
+    ApproxWindingNumber3(p̃, term1, term2, term3) 
   else
-    w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃)
+  #  w̃ = (q)->term1⋅∇G(q, p̃) + term2⋅∇²G(q, p̃)
+    ApproxWindingNumber2(p̃, term1, term2) 
   end
 
   # is storing a closure reasonably performant?  if not we should just be storing (p̃, term1...)
-  return w̃
+  #return w̃
+
 end
 
 approx_winding_number(topo, P, F::Vector{FaceHandle}) = approx_winding_number(topo, P, faces(topo)[F])
@@ -140,15 +162,18 @@ end
 
 struct WindingNumberCache
   bvh::IndexedBinaryTree{AVLData{AABBNodeData{Float64,Int64}}}
-  W::Vector{Function}
+  #W::Vector{Function}
+  W::Vector{ApproxWindingNumber2}  #!me ignore order 3 for now
   height_cutoff::Int64
   β::Float64
-  WindingNumberCache(a,b,c,d) = new(a,b,c,d)
+  F::Vector{Vector{HalfEdgeHandle}}
+  WindingNumberCache(a,b,c,d,e) = new(a,b,c,d,e)
+  WindingNumberCache(a,b,c,d) = new(a,b,c,d,Vector{Vector{HalfEdgeHandle}})
 end
 
 WindingNumberCache(a,b,c) = WindingNumberCache(a, b, c, 2.0)
 
-function winding_number_cache(topo, P, tris_for_brute = 200, order=2)
+function winding_number_cache(topo, P, tris_for_brute = 100, order=2)
   aabbs = map((Fᵢ, i)->AABBNodeData(AABB(P[Fᵢ]), i), polygons(topo), 1:nfaces(topo))
   bt = avlitree(map( (Fᵢ, i)->AABBNodeData(AABB(P[Fᵢ]), i), polygons(topo), 1:nfaces(topo)))
 
@@ -163,15 +188,25 @@ function winding_number_cache(topo, P, tris_for_brute = 200, order=2)
   lc = TraverseWhen(n->height(n) >= height_for_approx, bt, ileaves)
   
   faceheh(n) = n |> data |> value |> i->halfedge(topo, FaceHandle(i))
-  W = Function[]
+  W = ApproxWindingNumber2[]
   resize!(W, nnodes)
   W[ TraverseWhen(n->height(n) >= height_for_approx, bt, index) |> collect ] = 
     [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
 
-#  W[ itraversewhen(n->height(n) >= height_for_approx, bt, Int, index) ] = 
-#    [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
+  #  W[ itraversewhen(n->height(n) >= height_for_approx, bt, Int, index) ] = 
+  #    [ approx_winding_number(topo, P, map(faceheh, lcᵢ), order) for lcᵢ in lc ]
 
-  WindingNumberCache(bt, W, height_for_approx)
+
+  at_height = Iterators.filter(n->height(n) == height_for_approx-1,
+                               itraversewhen(n->height(n) >= height_for_approx-1, 
+                                             bt, eltype(bt), identity))
+  iF = map(index, at_height)
+  nF = reduce(max, iF) 
+  F = Vector{HalfEdgeHandle}[]
+  resize!(F, nF)
+  F[iF] = map(n->faceheh.(ileaves(n)), at_height)
+
+  WindingNumberCache(bt, W, height_for_approx, 2.0, F)
 end
 
 """
@@ -183,29 +218,91 @@ function winding_number(topo, P, q, cache::WindingNumberCache)
 end
 
 function winding_number(topo, P, q, node::BT, β²::Float64, cache) where {T, BT<:IndexedBinaryTree{T}}
-  if height(node) < cache.height_cutoff
+  if height(node) == cache.height_cutoff-1
+    return mapreduce(heh->solid_angle(topo, P, heh, q), +, cache.F[index(node)])/(4.0π)
+  elseif height(node) < cache.height_cutoff
     return winding_number(topo, P, q, node)
   else
     aabb = key(node)
     p = centre(aabb)
     r = radius_squared(aabb)
     if LinearAlgebra.norm_sqr(q - p) > β²*r
-      #println("WHATUP")
-      return cache.W[index(node)](q)
+      #println("WHATUP", index(node))
+      #return cache.W[index(node)](q)
+      return approx_winding_number(cache.W[index(node)], q)
     else
       # descend 
       #println("crazy!!!")
       return winding_number(topo, P, q, left(node), β², cache) +
-        winding_number(topo, P, q, right(node), β², cache)
+             winding_number(topo, P, q, right(node), β², cache)
     end
   end
 end
 
-function winding_number(topo, P, q, node::BT) where {T, BT<:BinaryTree{T}}
-  mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, ileaves(node))/(4.0π)
+function iwinding_number(topo, P, q, cache::WindingNumberCache)
+  node = cache.bvh
+  β² = cache.β*cache.β
+  iwinding_number(topo, P, q, node, β², cache)
+end
+
+function iwinding_number(topo, P, q, node::BT, β²::Float64, cache) where {T, BT<:IndexedBinaryTree{T}}
+  sum = 0.0
+  nodestack = [index(node)] 
+
+  while !isempty(nodestack)
+    node = cache.bvh[pop!(nodestack)]
+    #println(height(node), " compare ", cache.height_cutoff-1)
+    if height(node) < cache.height_cutoff-1
+      sum += winding_number(topo, P, q, node)
+    elseif height(node) == cache.height_cutoff-1
+      sum += mapreduce(heh->solid_angle(topo, P, heh, q), +, cache.F[index(node)])/(4.0π)
+      #  sum += solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(node)))), q)/(4.0π)
+      #if height(node) == 0
+      #  sum += solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(node)))), q)/(4.0π)
+    else
+      aabb = key(node)
+      p = centre(aabb)
+      r = radius_squared(aabb)
+      if LinearAlgebra.norm_sqr(q - p) > β²*r
+        #println("WHATUP", index(node))
+        #return cache.W[index(node)](q)
+        sum += approx_winding_number(cache.W[index(node)], q)
+      else
+        # descend 
+        #println("crazy!!!")
+        push!(nodestack, ileft(node))
+        push!(nodestack, iright(node))
+      end
+    end
+  end
+  sum
+end
+
+function winding_number(topo, P, q, node::BT) where {T, BT<:IndexedBinaryTree{T}}
+  #mapreduce(l->solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(l)))), q), +, ileaves(node))/(4.0π)
+  wn = 0.0
+  nodestack=[node]
+  while !isempty(nodestack)
+    node = pop!(nodestack)
+
+    if isleaf(node)
+      wn += solid_angle(topo, P, halfedge(topo, FaceHandle(value(data(node)))), q)
+    else
+      l = left(node)
+      r = right(node)
+      l != BoundingVolumeTrees.EmptyIndexedNode && push!(nodestack, left(node))
+      r != BoundingVolumeTrees.EmptyIndexedNode && push!(nodestack, right(node))
+    end
+  end
+  wn/(4.0π)
 end
 
 winding_number(topo, P, q) = mapreduce(i->solid_angle(topo, P, i, q), +, faces(topo))/(4.0π)
+
+winding_numbers(topo, P::V, cache; jiggle = eps(T)) where {T, 
+                                                           PT<:AbstractVector{T}, 
+                                                           V<:AbstractVector{PT}} = 
+  map( q->iwinding_number(topo, P, q, cache), P+vertexnormals(topo, P)*jiggle)
 
 """
     winding_numbers(topo, P::V; jiggle = ϵ)
@@ -214,11 +311,12 @@ The winding number for each vertex of a mesh.
 A vertex is lifted slightly off the surface in the normal direction to give winding number of 0 for vertices on the surface, but otherwise on exterior of the mesh.
 The amount of normal lifting is controlled with the jiggle parameter 
 """
-function winding_numbers(topo, P::V; jiggle = eps(T), approx=false ) where {T, PT<:AbstractVector{T}, V<:AbstractVector{PT}}
+function winding_numbers(topo, P::V; jiggle = eps(T), approx=false, cacheleaves=50 ) where {T, PT<:AbstractVector{T}, V<:AbstractVector{PT}}
   if approx
     #!me fast winding numbers are anything but atm. some serious performance issue we need to investigate
-    cache = winding_number_cache(topo, P)
-    map( q->winding_number(topo, P, q, cache), P+vertexnormals(topo, P)*jiggle)
+    cache = winding_number_cache(topo, P, cacheleaves)
+    winding_numbers(topo, P, cache; jiggle=jiggle)
+    #map( q->iwinding_number(topo, P, q, cache), P+vertexnormals(topo, P)*jiggle)
   else
     map( q->winding_number(topo, P, q), P+vertexnormals(topo, P)*jiggle)
   end

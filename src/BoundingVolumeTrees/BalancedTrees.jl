@@ -22,14 +22,14 @@ struct RAVLBalanced <: BalanceTrait end
 abstract type BalanceData{T} <: WrappedData{T} end
 struct AVLData{T} <: BalanceData{T}
   kv::T
-  rank::Int32
+  rank::Int64
 end
 
 wrapped_data(n::AVLData{T}) where T = n.kv
 
-AVLData(kv::T, h::S) where {T,S<:Integer} = AVLData(kv,Int32(h))
-AVLData(kv::T) where T = AVLData(kv,Int32(0))
-AVLData{T}(kv::T) where T = AVLData(kv,Int32(0))
+AVLData(kv::T, h::S) where {T,S<:Integer} = AVLData(kv,Int64(h))
+AVLData(kv::T) where T = AVLData(kv,Int64(0))
+AVLData{T}(kv::T) where T = AVLData(kv,Int64(0))
 
 const AVLNode{T} = Union{Node{AVLData{T}}, IndexedBinaryTree{AVLData{T}}}
 
@@ -147,6 +147,13 @@ function rebuild_node(dir::Val{:both},
   balance(rebuild_node!(dir, lc, rc, n, avldata))
 end
 
+
+function ileaves(t::IndexedBinaryTree{AVLData{T}}) where T
+  L = Vector{IndexedNode{AVLData{T}}}(undef, 1<<height(t))
+  resize!(L, 0);
+  ileaves(t.nodes, t.node, L);
+  return L
+end
 
 
 

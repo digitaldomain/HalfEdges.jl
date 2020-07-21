@@ -101,6 +101,6 @@ function radius(a::AABB{T}) where {T}
 end
 
 function radius_squared(a::AABB{T}) where {T}
-  @inbounds @fastmath LinearAlgebra.norm_sqr(a.max-a.min)*T(0.5)
+  @inbounds @fastmath LinearAlgebra.norm_sqr(a.max-a.min)*T(0.25)
 end
 

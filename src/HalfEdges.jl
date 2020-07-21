@@ -59,6 +59,7 @@ export
   face,
   halfedge,
   vertices,
+  solide_angle,
   winding_number,
   winding_numbers,
   winding_number_cache

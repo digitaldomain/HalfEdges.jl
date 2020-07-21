@@ -3,7 +3,10 @@ IndexedBinaryTree,
 itree,
 index,
 ileaves,
-itraversewhen
+itraversewhen,
+ileft,
+iright
+
 
 const EmptyIndexedNode = -1
 
@@ -62,11 +65,12 @@ root(tree::IndexedBinaryTree{T}) where T = IndexedBinaryTree{T}(tree.nodes, tree
 Base.getindex(A::IndexedBinaryTree{T}, i::Number) where {T} = IndexedBinaryTree{T}(A.nodes, i)
 
 function ileaves(t::IndexedBinaryTree{T}) where T
-  L = Vector{IndexedNode{T}}(undef, (length(t.nodes)>>1)+1)
+  L = Vector{IndexedNode{T}}(undef, 16)
   resize!(L, 0);
   ileaves(t.nodes, t.node, L);
   return L
 end
+
 
 function ileaves( n::NodeVector{T}, i::Int, L::Vector{IndexedNode{T}} ) where T
   nc = 0
@@ -213,6 +217,10 @@ key(tree::IndexedBinaryTree{T}) where T = key(tree.nodes[tree.node].data)
 left(tree::IndexedBinaryTree{T}) where T = isempty_node(tree.nodes[tree.node].left) ? nothing : itree(tree, tree.nodes[tree.node].left)
 
 right(tree::IndexedBinaryTree{T}) where T = isempty_node(tree.nodes[tree.node].right) ? nothing : itree(tree, tree.nodes[tree.node].right)
+
+ileft(tree::IndexedBinaryTree{T}) where T = tree.nodes[tree.node].left
+iright(tree::IndexedBinaryTree{T}) where T = tree.nodes[tree.node].right
+
 
 parent(tree::IndexedBinaryTree{T}) where T = isempty_node(tree.nodes[tree.node].parent) ? nothing : itree(tree, parent(tree.nodes[tree.node]))
 
