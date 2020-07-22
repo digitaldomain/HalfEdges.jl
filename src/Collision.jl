@@ -21,14 +21,17 @@ const 𝑖 = 1.0im
 
 # (-+++) clifford algebra
 # should do a performance comparison with StaticArrays, SparseArrays and Arrays
-const g1,g2,g3,g4 = sparse.(im .* (γ0, γ1, γ2, γ3))
+#const g1,g2,g3,g4 = sparse.(im .* (γ0, γ1, γ2, γ3))
+#const g1,g2,g3,g4 = (im .* (γ0, γ1, γ2, γ3))
+const g1,g2,g3,g4 = SMatrix{4,4,Complex{Float64}}.(im .* (γ0, γ1, γ2, γ3))
 
 const 𝐼 = g1*g2*g3*g4
 const ProjectivePoint = typeof(g1)
 const ProjectiveLine = ProjectivePoint
 const ProjectivePlane = ProjectivePoint
 
-∧(a::T, b::T) where T<:SparseMatrixCSC = a*b
+#∧(a::T, b::T) where T<:SparseMatrixCSC = a*b
+∧(a::T, b::T) where T<:SArray = a*b
 const join = ∧
 
 # orientation of a pseudoscalar element.
