@@ -4,7 +4,7 @@ Uses path compression. union! and find! are not threadsafe.
 """
 module IslandFind
 
-export union!, find!, islands, find_islands, group_sets
+export Archipelago, union!, find!, islands, find_islands, group_sets
 
 struct Node{T}
   parent::Int
@@ -15,7 +15,7 @@ end
 struct Archipelago
   parent::Vector{Int}
   rank::Vector{Int}
-  Archipelago(n) = new(fill(1, n), fill(1, n))
+  Archipelago(n) = new(collect(1:n), fill(1, n))
 end
 
 
@@ -82,7 +82,7 @@ find unique disjoint set ids for each entity.
 
 returns different data if group_by_entity is true or false.
 returns list of island ids for each entity if group_by_entity is set false
-returns dijoint sets of connected entities if group_by_entity is set true
+returns disjoint sets of connected entities if group_by_entity is set true
 
 if there are entites not represented in the connections but with ids < maximum id in the connections, they will be in singleton islands.  
 
@@ -113,7 +113,16 @@ function find_islands(connected::C,
 
   archi = map(i->find!(arp, i), 1:length(arp.parent))
   if group_by_entity
-    group_entities(archi)
+    group_sets(archi)
+  else
+    archi
+  end
+end
+
+function find_islands(arp::Archipelago, group_by_entity=true)
+  archi = map(i->find!(arp, i), 1:length(arp.parent))
+  if group_by_entity
+    group_sets(archi)
   else
     archi
   end

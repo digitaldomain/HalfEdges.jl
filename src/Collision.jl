@@ -110,17 +110,40 @@ return true if the triangle defined by points a,b,c is intersecting the triangle
 the hit record will include all edges intersecting the interior of a triangle
 
 the format of the hit record is:  ({true|false}, ({triangleID},({vertexID, vertexID}))) 
-triangleID = 1 or 2 to indicate triangle abc or def and vertexID is in range 1:3 indicating coresponding [a,b,c] or [d,e,f] index of other triangle.
+triangleID = 1 or 2 to indicate triangle abc or def and vertexID is in range 1:3 indexing segment in [a,b,c] or [d,e,f].
 
 operates on projective points created by γpoint
 """
 function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:ProjectivePoint}
+  planes = (a∧b∧c, d∧e∧f)
+  tris = ((a,b,c), (d,e,f))
+  triedges = (((a,b), (b,c), (c,a)), ((d,e), (e,f), (f,d)))
+  hitrecord = (((2,(1,2)), (2,(2,3)), (2,(3,1))), ((1,(1,2)), (1,(2,3)), (1,(3,1))))
+
+  hits = Tuple{Int64,Tuple{Int64,Int64}}[]
+  for itri in 1:2
+    plane = planes[itri]
+    tri = tris[itri]
+    otheredges = triedges[(itri&1)+1]
+    for iedge in 1:3
+      edge = otheredges[iedge]
+      if plane_segment(plane, edge) == 1
+        if triangle_line(tri, edge)
+          push!(hits, hitrecord[itri][iedge])
+        end
+      end
+    end
+  end
+
+  (length(hits) > 0, hits)
+
+  #==
   abc = a∧b∧c
   def = d∧e∧f
   abc_edges = ((a,b), (b,c), (c,a))
-  iabc_edges = ((2,(1,2)), (2,(2,3)), (2,(3,1)))
+  iabc_edges = ((1,(1,2)), (1,(2,3)), (1,(3,1)))
   def_edges = ((d,e), (e,f), (f,d))
-  idef_edges = ((1,(1,2)), (1,(2,3)), (1,(3,1)))
+  idef_edges = ((2,(1,2)), (2,(2,3)), (2,(3,1)))
 
   check_plane(plane, edges) = ( plane_segment(plane, edge) for edge in edges )
   check_plane2(plane, edges) = imap(second, Iterators.filter(first, zip(check_plane(plane, edges), edges)))
@@ -130,6 +153,7 @@ function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:Projective
   hits = vcat(Iterators.filter(first, zip(check_tri((a,b,c), abc, def_edges), idef_edges))|>collect,
               Iterators.filter(first, zip(check_tri((d,e,f), def, abc_edges), iabc_edges))|>collect )
   (length(hits) > 0, map(second,hits))
+  ==#
 end
 
 function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:SVector}

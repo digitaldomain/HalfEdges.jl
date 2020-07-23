@@ -32,6 +32,7 @@ export
   FaceHandle,
   EdgeHandle,
   OneRing,
+  OneRingVerts,
   Rim,
   Polygon,
   BoundaryLoop,
@@ -62,7 +63,8 @@ export
   solide_angle,
   winding_number,
   winding_numbers,
-  winding_number_cache
+  winding_number_cache,
+  floodfill
 
 include("Handles.jl")
 
@@ -307,6 +309,8 @@ function Base.iterate(i::OneRing, heh::HalfEdgeHandle)
   end
 end
 
+OneRingVerts(topo::Topology, h) = map(heh->head(topo, heh), OneRing(topo, h))
+
 """
   until( topo, he, v )
 
@@ -539,39 +543,26 @@ flood fill values at vertices where intersecting triangles create barrier.
 """
 function floodfill(topo::Topology, P)
   # find intersections
-  hits = collide_self(topo, P, triangle_edges);  
-  # hit record example: (358, 6709, (true, Tuple{Int64,Tuple{Int64,Int64}}[(1, (2, 3)), (2, (1, 2))]))
-  # (triangle1_index, triangle2_index, (true, [(which triangle, (edge vertices))...]))
-  # means triangle 358 was pierced by edge with vertices polygons(topo)[358][[2,3]]
-  # and   triangle 6709was pierced by edge with vertices polygons(topo)[6709][[1,2]]
+  hits = collide_self(topo, P)  
+  edgehits = sort.(collide_self_edges(topo, P))
+
+  blockers = Dict(map(ei->(ei,1), edgehits))
+
+  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  Vhit = (unique∘sort∘collect∘Iterators.flatten)(map(iF->vertices(topo, FaceHandle(iF)), Fhit))
   
-  F = polygons(topo)
-  n = normals(topo, P) 
+  V = Vhit
+  isls = Archipelago(length(P))
 
-
-  # this is not perfect, *--V--* hits 2 tris, can't determine which side it's on
-  #!me need to use winding numbers
-  for (tri1, tri2, (_, edges)) in hits
-    for (whichtri, (a, b)) in edges
-      if whichtri == 1
-        facetri = tri1
-        edgetri = tri2
-      else
-        facetri = tri2
-        edgetri = tri1
-      end
-      Fedge = F[edgetri]
-      Fface = F[facetri]
-      side = n[facetri]⋅(P[Fedge[a]]-P[Fface[1]]) > 0.0 ? 1 : -1
-      hitside[Fedge[a]] = side
-      side = n[facetri]⋅(P[Fedge[b]]-P[Fface[1]]) > 0.0 ? 1 : -1
-      hitside[Fedge[b]] = side
+  for vᵢ ∈ (VertexHandle(i) for i in 1:length(P))
+    vring = OneRingVerts(topo, VertexHandle(vᵢ))
+    for vrᵢ in Iterators.filter(vrᵢ->haskey(blockers, sort((vᵢ, vrᵢ)))==false, vring)
+      IslandFind.union!(isls, (Int(vᵢ), Int(vrᵢ)))
     end
   end
-
-  # isolate islands
-
+  find_islands(isls)
 end
+
 
 """
     polygons(topo)
@@ -1171,6 +1162,7 @@ export
 BVH,
 Collider,
 collide_self,
+collide_self_edges,
 query_aabb,
 update_collider
 
@@ -1213,6 +1205,27 @@ function collide_self(collider::Collider, collidef::F = Collision.triangle_trian
   BVH.selfintersect(collider.bvh, collider.mesh, collidef)
 end
 
+function edgeshit((a,b,(_,((s,(v1,v2)), (t,(w1,w2))))), triP)
+    ab = (a,b)
+    ((triP[ab[s]][v1], triP[ab[s]][v2]),
+        (triP[ab[t]][w1], triP[ab[t]][w2]))
+end
+
+"""
+    collide_self_edges(collider)
+
+collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh in collision with triangles of th e mesh.
+"""
+function collide_self_edges(topo, collider::Collider)
+  hits = collide_self(collider, Collision.triangle_edges)
+  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  triP = Vector{Vector{VertexHandle}}(undef, reduce(max, Fhit))
+  triP[Fhit] = map(iF->vertices(topo, FaceHandle(iF)), Fhit)
+
+  map(hit->edgeshit(hit, triP), hits) |> Iterators.flatten |> collect
+end
+
+collide_self_edges(topo::Topology, P::Vector{T}) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P))
 """
     query_aabb(collider, aabb, hits)
 
