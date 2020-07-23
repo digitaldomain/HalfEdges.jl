@@ -1248,5 +1248,8 @@ update the collision detection structures in collider to reflect any change in m
 update_collider( collider::C ) where C<:Collider = BVH.updateBVH(collider.bvh, collider.mesh)
 
 include("WindingNumbers.jl")
+include("DifferentialGeometry.jl")
 
+using .DifferentialGeometry
+DifferentialGeometry.Δ( topo::Topology, P ) = DifferentialGeometry.Δ(polygons(topo) |> Iterators.flatten |> collect, P) 
 end # module
