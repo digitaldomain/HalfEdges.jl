@@ -14,4 +14,4 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 [compat]
 AbstractTrees = "0.3"
 StaticArrays = "0, 1"
-julia = "1"
+julia = "1.3"
