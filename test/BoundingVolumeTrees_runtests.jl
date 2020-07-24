@@ -23,6 +23,23 @@ const Vector3{T} = SVector{3,T}
 
   t = tree(["cat", "awnt", "aardvark", "ant", "dog", "dag", "zat", "doog"])
   @test leaves(t, x->length(key(x)) < 4) |> first |> key == "dag"
+
+  it = itree(["cat", "awnt", "aardvark", "ant", "dog", "dag", "zat", "doog"])
+  @test map(data, leaves(it)) == map(data, leaves(t))
+  @test map(data, it) == map(data, t)
+
+  build_rosetta( (n, l, r ) ) = Node(n, build_rosetta(l), build_rosetta(r))
+  build_rosetta( n::Nothing ) = nothing
+  build_rosetta( n::Int ) = Node(n)
+  rosetta = build_rosetta((1, (2, (4, 7, nothing), 5), (3, (6, 8, 9), nothing)))
+   
+  @test reduce( *, Traverse(rosetta, x->string(" ", data(x)), nothing, nothing)) ==
+        " 1 2 4 7 5 3 6 8 9"
+  @test reduce( *, Traverse(rosetta, nothing, nothing, x->string(" ", data(x)))) ==
+        " 7 4 2 5 1 8 6 9 3"
+  @test reduce( *, Traverse(rosetta, nothing, x->string(" ", data(x)), nothing)) ==
+        " 7 4 5 2 8 9 6 3 1"
+
 end
 
 @testset "delete" begin
@@ -44,8 +61,10 @@ end
 
   linear255 = tree(1:255|>collect)
   balanced255 = avltree(1:255|>collect)
+  ibalanced255 = avlitree(1:255|>collect)
   @test height(linear255) == 255
   @test height(balanced255) == 7
+  @test height(ibalanced255) == 7
 
   b15 = avltree(1:15|>collect)
   sb15 = reduce((t,i)->delete(t,i),[6];init=b15)|>left|>right
@@ -102,15 +121,20 @@ function aabbtree(extents, treebuilder)
   treebuilder(map( ((n,x),i)->AABBNodeData(AABB(n,x),i), extents, 1:length(extents))) 
 end
 
+boxes = [([-4,-1,-1],[-1,1,1]),([1,-1,-1],[4,1,1]),
+         ([2,-1,-1],[3,1,1]), ([-10,-1,-1],[10,1,1]),
+         ([11,-1,-1],[12,1,1]),([7,-1,-1],[8,1,1]),
+         ([7.5,-1,-1],[7.75,1,1])]
+
 @testset "AABBTree" begin
-  boxes = [([-4,-1,-1],[-1,1,1]),([1,-1,-1],[4,1,1]),
-           ([2,-1,-1],[3,1,1]), ([-10,-1,-1],[10,1,1]),
-           ([11,-1,-1],[12,1,1]),([7,-1,-1],[8,1,1]),
-           ([7.5,-1,-1],[7.75,1,1])]
   abba = aabbtree(boxes, tree)
   babba = aabbtree(boxes, avltree)
+  iabba = aabbtree(boxes, itree)
+  biabba = aabbtree(boxes, avlitree)
   @test contains((abba |> data |> x->x.aabb), (abba |> left |> data |> x->x.aabb))
   @test contains((abba |> data |> x->x.aabb), (abba |> right |> data |> x->x.aabb))
+  @test Leaves(iabba) |> collect |> x->map(data,x) == Leaves(abba) |> collect |> x->map(data,x) 
+  @test Leaves(biabba) |> collect |> x->map(data,x) == Leaves(babba) |> collect |> x->map(data,x) 
   @test contains((babba |> key ), (abba |> left |> key ))
   @test contains((babba |> key ), (abba |> right |> key ))
   hits = query(abba, AABB(Vector3(9.0,-10.0,-10.0),Vector3(20.0,10.0,10.0)))
@@ -130,3 +154,10 @@ end
   @test contains((t |> left |> data |> getaabb), (t |> left |> right |> data |> getaabb))
 
 end
+
+@testset "leaky" begin
+  @test Traverse(itree([1,3,2,4]), index) |> collect |> sort == [1,2,3,4]
+  alli = Traverse(aabbtree(boxes, itree), index) |> collect |> sort 
+  @test alli == collect(1:length(alli))
+end
+

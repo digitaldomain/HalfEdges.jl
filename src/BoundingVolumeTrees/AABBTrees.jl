@@ -2,19 +2,20 @@ export
 AABBNode,
 AABBNodeData,
 entity,
-query
+query,
+aabb
 
 import Base.isless
 using Base.Iterators
 
 struct AABBNodeData{T,S}
   aabb::AABB{T}
-  entity::S  #!me union of parent pointer and entityID?  entity only relevant at leaf
+  entity::S
 end
 
 AABBNodeData{T,S}() where {T,S} = AABBNodeData{T,S}(AABB{T}(), nothing)
 
-const AABBNode{T,S} = Node{AABBNodeData{T,S}}
+const AABBNode{T,S} = BinaryTree{AABBNodeData{T,S}}
 
 # Traits #
 abstract type QueryTrait  end
@@ -22,8 +23,10 @@ struct IntervalTree <: QueryTrait end
 struct SearchTree <: QueryTrait end
 
 key(n::AABBNodeData{T,S}) where {T,S} = n.aabb 
+aabb(n::AABBNodeData{T,S}) where {T,S} = n.aabb 
 
-fullness(::Type{Node{AABBNodeData{T,S}}}) where {T,S} = FullTree
+#fullness(::Type{BinaryTree{AABBNodeData{T,S}}}) where {T,S} = FullTree
+fullness(::Type{BT}) where {T, S, A<:AABBNodeData{T,S}, BT<:BinaryTree{A}} = FullTree
 
 query_trait(::Type) = SearchTree()
 query_trait(::Type{<:Node{AABBNodeData{T,S}}}) where {T,S} = IntervalTree()
@@ -33,6 +36,8 @@ entity(n::AABBNode{T,S}) where {T,S} = data(n).entity
 entity(n::AABBNodeData{T,S}) where {T,S} = n.entity
 entity(_::Type{S}, n::AABBNodeData{T,S}) where{T,S} = n.entity 
 entity(s::Type{S}, n::Nothing) where {S} = zero(S) 
+data(n::AABBNodeData{T,S}) where {T,S} = n.entity
+value(n::AABBNodeData{T,S}) where {T,S} = n.entity
 
 function branch_compare( aabb::AABB{T} ) where {T}
   n -> begin

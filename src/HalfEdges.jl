@@ -32,6 +32,7 @@ export
   FaceHandle,
   EdgeHandle,
   OneRing,
+  OneRingVerts,
   Rim,
   Polygon,
   BoundaryLoop,
@@ -49,12 +50,26 @@ export
   head,
   tail,
   isboundary,
-  opposite
+  opposite,
+  boundary_verts,
+  boundary_vertices,
+  boundary_interior,
+  vertexnormals,
+  normals,
+  polygons,
+  face,
+  halfedge,
+  vertices,
+  solide_angle,
+  winding_number,
+  winding_numbers,
+  winding_number_cache,
+  floodfill
 
 include("Handles.jl")
 
-partial = (f::Function,y...)->(z...)->f(y...,z...)
-∂(f::Function,y...) = partial(f,y...)
+partial = (f::Function, y...)->(z...)->f(y..., z...)
+∂(f::Function,y...) = partial(f, y...)
 second(c) = c[2]
 
 @HandleType HalfEdgeHandle
@@ -91,8 +106,27 @@ const Mesh = Tuple{Topology, Vector{Vector3d}}
 const Edge = Tuple{Int,Int}
 
 HalfEdge(topo::Topology, heh::HalfEdgeHandle) = topo.he[heh]
+""" dereference the HalfEdgeHandle to get the struct """
 halfedge(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
 get(topo::Topology, heh::HalfEdgeHandle)  = HalfEdge(topo, heh)
+
+""" get a halfedge for this face """
+halfedge(topo::Topology, fh::FaceHandle) = topo.face2he[fh]
+
+""" get a halfedge for this vertex """
+halfedge(topo::Topology, vh::VertexHandle) = topo.v2he[vh]
+
+"""
+    halfedge( topo, vpair )
+
+The oriented halfedge for the edge connecting two vertex indices/handles.
+The halfedge points from first to second vertex in tuple vpair.
+"""
+halfedge(topo::Topology, e::T) where {T <: Tuple{VertexHandle, VertexHandle}} = 
+  Iterators.filter(h->head(topo, h)==e[2], OneRing(topo, e[1])) |> first
+
+halfedge(topo::Topology, e::T) where {V<:Integer, T<:Tuple{V,V}} = halfedge(topo, VertexHandle.(e))
+
 
 HalfEdgeHandle(topo::Topology, vh::VertexHandle) = topo.v2he[vh]
 
@@ -184,17 +218,6 @@ end
 halfedges(topo) = HalfEdgeHandle.(1:length(topo.he))
 halfedges(poly::Polygon) = [heh for heh in poly]
 
-"""
-    halfedge( topo, vpair )
-
-The oriented halfedge for the edge connecting two vertex indices/handles.
-The halfedge points from first to second vertex in tuple vpair.
-"""
-halfedge(topo::Topology, e::T) where {T <: Tuple{VertexHandle, VertexHandle}} = 
-  Iterators.filter(h->head(topo, h)==e[2], OneRing(topo, e[1])) |> first
-
-halfedge(topo::Topology, e::T) where {V<:Integer, T<:Tuple{V,V}} = halfedge(topo, VertexHandle.(e))
-
 edge(topo::Topology, heh::HalfEdgeHandle) =  (tail(topo,heh), head(topo,heh))
 "get an edge tuple from an EdgeHandle.  very slow"
 edge(topo::Topology, eh::EdgeHandle) = edges(topo)[eh]
@@ -285,6 +308,8 @@ function Base.iterate(i::OneRing, heh::HalfEdgeHandle)
     (heh,next(i.topo,opposite(i.topo,heh)))
   end
 end
+
+OneRingVerts(topo::Topology, h) = map(heh->head(topo, heh), OneRing(topo, h))
 
 """
   until( topo, he, v )
@@ -486,8 +511,61 @@ function dihedral_angle(topo::Topology, P, h)
   atan(sinθ, cosθ)
 end 
 
+
 """
-    polygons( topo )
+    inside_verts(topo, P, tris)
+
+return the vertices on the inside of a set of overlapping tris
+"""
+function inside_verts(topo, P, overlaptris::Tuple{HalfEdgeHandle, HalfEdgeHandle})
+  #cache = winding_number_cache(topo, P)
+
+end
+
+"""
+    enclose(topo, P, boundary_faces)
+
+return a list of all vertices enclosed by a contour of intersecting faces.  
+If the mesh is not closed this may return all the vertices in the mesh. 
+"""
+function enclose(topo, P, boundary::Vector{Tuple{HalfEdgeHandle, HalfEdgeHandle}})
+  #nPi = map(boundary_faces) do heh
+
+  #end
+end
+
+#enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
+
+"""
+    floodfill(topo, P)
+
+flood fill values at vertices where intersecting triangles create barrier.
+"""
+function floodfill(topo::Topology, P)
+  # find intersections
+  hits = collide_self(topo, P)  
+  edgehits = sort.(collide_self_edges(topo, P))
+
+  blockers = Dict(map(ei->(ei,1), edgehits))
+
+  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  Vhit = (unique∘sort∘collect∘Iterators.flatten)(map(iF->vertices(topo, FaceHandle(iF)), Fhit))
+  
+  V = Vhit
+  isls = Archipelago(length(P))
+
+  for vᵢ ∈ (VertexHandle(i) for i in 1:length(P))
+    vring = OneRingVerts(topo, VertexHandle(vᵢ))
+    for vrᵢ in Iterators.filter(vrᵢ->haskey(blockers, sort((vᵢ, vrᵢ)))==false, vring)
+      IslandFind.union!(isls, (Int(vᵢ), Int(vrᵢ)))
+    end
+  end
+  find_islands(isls)
+end
+
+
+"""
+    polygons(topo)
 
 extract polygons as arrays of vertex indices 
 """
@@ -497,7 +575,7 @@ minussigned( ::Val{false} ) = 1.0
 minussigned( ::Val{true} ) = -1.0
 
 """
-    incidence( topo, AHandleType, BHandleType, oriented = false )
+    incidence(topo, AHandleType, BHandleType, oriented = false)
 
 build incidence matrix mapping between two elements
 |b|x|a| matrix. i.e. incidence of {vertex} and {face} has size(vertex) columns and size(face) rows
@@ -656,6 +734,11 @@ return faces as arrays of integers
 facelist(topo::Topology) = (x->Int.(vertices(topo,Polygon(topo,x)))).(faces(topo))
 
 
+"""
+  trinormal(topo, P, h)
+
+normal for triangle associated with HalfEdgeHandle h 
+"""
 function trinormal(topo::Topology, P, h::HalfEdgeHandle)
   h = isboundary(topo, h) ? opposite(topo, h) : h
   pa = P[head(topo, h)]; h = next(topo, h)
@@ -670,7 +753,52 @@ function trinormal(topo::Topology, P, h::HalfEdgeHandle)
   end
 end
 
+"""
+    normals(topo, P)
+
+triangle normals for all faces
+"""
 normals(topo::Topology, P) = map( fheh->trinormal(topo, P, fheh), faces(topo)) 
+
+
+"""
+    weightednormal(topo, P, heh)
+
+area weighted normal of a triangle
+"""
+function weightednormal(mesh, P, heh::HalfEdgeHandle)
+  p₀ = P[head(mesh, heh)]
+  heh₁ = next(mesh, heh)
+  p₁ = P[head(mesh, heh₁)]
+  p₂ = P[head(mesh, next(mesh, heh₁))]
+
+  0.5*(p₁-p₀)×(p₂-p₀)
+end
+
+"""
+    vertexnormal(topo, p, ring)
+
+normal of a vertex given it's OneRing
+"""
+function vertexnormal( mesh, P, ring::OneRing, normal = weightednormal )
+  iring = Iterators.filter(heh->!isboundary(mesh,heh),ring)
+  normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+end
+
+"""
+    vertexnormals(topo, P, weighted=true)
+
+vertex normals for all vertices in mesh, optionally area weighted.    
+"""
+function vertexnormals( mesh, P, weighted = true )
+  rings = (heh->OneRing(heh,mesh)).(vertices(mesh))
+  if weighted
+    n = ring->vertexnormal( mesh, P, ring, weightednormal )
+  else
+    n = ring->vertexnormal( mesh, P, ring, normalize∘weightednormal )
+  end
+  n.(rings)
+end
 
 """
   angles(topo, P, poly)
@@ -906,22 +1034,35 @@ end
 """
   boundary_verts(topo)
 
-find loop of boundary verts
-assumes only one boundary loop exists
+find loops of boundary verts
 """
-boundary_verts(mesh) = BoundaryLoop(mesh,filter(∂(isboundary, mesh),halfedges(mesh)) |> first) |> ∂(map,∂(tail,mesh))
+function boundary_verts(topo) 
+  bh = filter(∂(isboundary, topo), halfedges(topo))
+
+  bvl = Vector{VertexHandle}[]
+
+  while !isempty(bh)
+    bl = BoundaryLoop(topo, bh |> first)
+    bh = setdiff(bh, bl)
+    push!(bvl, map(∂(tail, topo), bl))
+  end
+
+  bvl
+end
+
+boundary_vertices(x) = boundary_verts(x)
 
 """
-  boundary_interior(topo)
+  boundary_interior(topo, boundary)
 
-the set of vertices connected to the boundary but not part of the boundary
-assumes only one boundary loop exists
+the set of vertices connected to the boundary verts but not part of the boundary
 """
-function boundary_interior(mesh)
-  boundary = boundary_verts(mesh)
+function boundary_interior(mesh, boundary)
   allverts = mapreduce(x->OneRing(mesh, x) |> ∂(∂(mapreduce,(x->[x...])∘∂(edge,mesh)),vcat), vcat , boundary)
   setdiff(allverts,boundary)
 end
+
+boundary_interior(topo) = map(b->boundary_interior(topo, b), boundary_verts(topo))
 
 # single airty versions
 
@@ -1009,13 +1150,19 @@ end
 #==========  Collision Detection ============#
 
 include("BoundingVolumeTrees.jl")
+include("Collision.jl")
+include("IslandFind.jl")
 
 using .BoundingVolumeTrees
+using .Collision
+using .IslandFind
+
 
 export 
 BVH,
 Collider,
 collide_self,
+collide_self_edges,
 query_aabb,
 update_collider
 
@@ -1041,20 +1188,52 @@ end
     collide_self(topo, P, collidef)
 
 return a list of faces which are intersecting in the mesh.
-you must provide the face vs face collision routine in collidef
+provide the face vs face collision method in collidef
+
+collidef should be a function that accepts 6 points as arguments, which are the points of the two triangle.
+It should return a tuple where the first element is a boolean value indicating if there was a collision or not
 """
-collide_self(topo::Topology, P, collidef::F) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
+collide_self(topo::Topology, P, collidef::F = Collision.triangle_triangle) where {F<:Function} = collide_self(Collider(topo, P), collidef) 
 
 """
     collide_self(collider, collidef)
 
 return a list of faces which are intersecting in the mesh.
-you must provide the face vs face collision routine in collidef
+provide the face vs face collision method in collidef
 """
-function collide_self(collider::Collider, collidef::F) where{F<:Function}
+function collide_self(collider::Collider, collidef::F = Collision.triangle_triangle) where{F<:Function}
   BVH.selfintersect(collider.bvh, collider.mesh, collidef)
 end
 
+function edgeshit2((a,b,(_,((s,(v1,v2)), (t,(w1,w2))))), triP)
+    ab = (a,b)
+    ((triP[ab[s]][v1], triP[ab[s]][v2]),
+        (triP[ab[t]][w1], triP[ab[t]][w2]))
+end
+
+function edgeshit(hit::T, triP) where T<:Tuple{Int64,Int64,Tuple{Bool,Vector{Tuple{Int64,Tuple{Int64,Int64}}}}}
+  (a,b,(_,E)) = hit
+  ab = (a,b)
+  map(E) do (s,(v1,v2))
+    (triP[ab[s]][v1], triP[ab[s]][v2])
+  end
+end
+
+"""
+    collide_self_edges(collider)
+
+collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh in collision with triangles of th e mesh.
+"""
+function collide_self_edges(topo, collider::Collider)
+  hits = collide_self(collider, Collision.triangle_edges)
+  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  triP = Vector{Vector{VertexHandle}}(undef, reduce(max, Fhit))
+  triP[Fhit] = map(iF->vertices(topo, FaceHandle(iF)), Fhit)
+
+  map(hit->edgeshit(hit, triP), hits) |> Iterators.flatten |> collect
+end
+
+collide_self_edges(topo::Topology, P::Vector{T}) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P))
 """
     query_aabb(collider, aabb, hits)
 
@@ -1076,4 +1255,9 @@ update the collision detection structures in collider to reflect any change in m
 """
 update_collider( collider::C ) where C<:Collider = BVH.updateBVH(collider.bvh, collider.mesh)
 
+include("WindingNumbers.jl")
+include("DifferentialGeometry.jl")
+
+using .DifferentialGeometry
+DifferentialGeometry.Δ( topo::Topology, P ) = DifferentialGeometry.Δ(polygons(topo) |> Iterators.flatten |> collect, P) 
 end # module

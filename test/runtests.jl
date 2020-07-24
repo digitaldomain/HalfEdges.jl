@@ -110,6 +110,10 @@ end
   FE = he_.incidence(topo, EdgeHandle, FaceHandle,true)
   EV = he_.incidence(topo, VertexHandle, EdgeHandle,true)
   @test iszero(FE*EV) 
+  @test length(vertexnormals(topo, P)) == nvertices(topo)
+  @test vertexnormals(topo,P)[1] == [0.0, 0.0, 1.0]
+  @test length(normals(topo, P)) == nfaces(topo) 
+  @test normals(topo,P)[1] == [0.0, 0.0, 1.0]
 end
 
 @testset "3x3grid" begin
@@ -117,7 +121,7 @@ end
   topo = Topology(Iterators.flatten([cell(1,1), cell(2,1), cell(3,1), 
                                      cell(1,2), cell(2,2), cell(3,2), 
                                      cell(1,3), cell(2,3), cell(3,3)])|>collect)
-  @test sort(he_.boundary_interior(topo)) == [6,7,10,11]
+  @test sort(first(he_.boundary_interior(topo))) == [6,7,10,11]
 
 end
 
@@ -221,6 +225,12 @@ end
   topo,P = cube()
   col = Collider(topo, P)
   tophalf = query_aabb(col, HalfEdges.BVH.AABB(SVector{3}(0.,0.,0.5), SVector{3}(1.0,1.0,1.0)))  
+  pre = []
+  inorder = []
+  post = []
+  HalfEdges.BVH.visitdf(col.bvh, x->push!(pre, x), x->push!(post, x), x->push!(inorder, x))
+  @test length(pre) == length(post) == length(inorder) > 0
+
   # should contain all triangles other than bottom two
   @test length(tophalf) == nfaces(topo)-2
   @test isempty(tophalf ∩ [11, 12])   
@@ -228,9 +238,59 @@ end
   #pull point into self intersection
   col.mesh.P[1] = SVector{3}(0.5,0.5,2.0)
   update_collider(col)
-  foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
-  @test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
+  #foo(a1,a2,a3, b1,b2,b3) = a2[1] > 1.0
+  #@test collide_self(col, foo) == collide_self(topo, col.mesh.P, foo)
+  @test collide_self(col) == collide_self(topo, col.mesh.P)
 
+  #==
+      2---4
+     /|\  |\
+    5 | \ | 6    then move 5 and 6 so they intersect
+     \|  \|/
+      1---3
+  ==#
+  F = [[1,3,2],[2,3,4],[2,5,1],[3,6,4]]
+  topo = Topology(F)
+  P = [0 0 0
+       0 1 0
+       1 0 0
+       1 1 0
+       1 0.5 1
+       0 0.5 1
+      ]
+  P = SVector{3}.(eachrow(Float64.(P)))
+  #foo(a1,a2,a3, b1,b2,b3) = a1[2] > 0.0   # our two triangle with z > 0 are in collision
+  #hits = collide_self(Collider(topo, P), foo)
+  hits = collide_self(Collider(topo, P))
+  @test length(hits) == 1
+
+  # want to get lots of hits to test when hits array is resized
+  topo = Topology(repeat(F, 100))
+  #hits = collide_self(Collider(topo, P), foo)
+  hits = collide_self(Collider(topo, P))
+  @test length(hits) > 1
+end
+
+@testset "winding numbers" begin
+  topo, P = cube()
+
+  Fi = FaceHandle.(1:nfaces(topo))
+  centre = sum(P)/length(P)
+  @test sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), centre), Fi)) ≈ 4.0*π
+  @test sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), P[1]), Fi)) ≈ π/2.0
+
+  # outside, accuracy seems lower for some reason
+  @test abs(sum(map(fh->he_.solid_angle(topo, P, he_.halfedge(topo, fh), P[1]-centre), Fi))) < 1e6 
+
+  cache = winding_number_cache(topo, P, 1)
+  #cache3 = winding_number_cache(topo, P, 1, 3)
+
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache) |> round == 0
+  #@test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache3) |> round == 0
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0), cache.bvh) |> round == 0
+  @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0)) |> round == 0
+  @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5), cache) |> round == 1 
+  @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5)) |> round == 1 
 end
 
 @testset "load a mesh" begin

@@ -5,8 +5,8 @@ struct Triangles{IntT,FloatT}
   P::Vector{SVector{3,FloatT}}
 end
 
-export 
-insert, query, makeroot, isleaf, visit, visitbf, 
+export
+insert, query, makeroot, isleaf, visit, visitbf,
 updateBVH, createBVH, @createBVH_nplex,
 selfintersect, selfintersects, @selfintersect, @selfintersects,
 DAABBNode, EmptyTree, triangle_intersect,
@@ -21,7 +21,7 @@ import Base.<
 
 #========== macros ==========#
 
-#== this will make a block of 
+#== this will make a block of
 quote
   baseindex_ = 3 * (j - 1)
   j1 = A[baseindex_ + 1]
@@ -30,14 +30,14 @@ quote
 end
 ==#
 macro simplex_indices(A,dim,j)
-  Expr(:block, 
-       Expr(:(=), 
+  Expr(:block,
+       Expr(:(=),
             Expr(:escape, Symbol("baseindex_")),
             Expr(:call, :*, eval(dim), Expr(:call, :-, Expr(:escape, j), 1))),
-       map( i->Expr(:(=), 
-                    Expr(:escape, Symbol(j,i)), 
-                    Expr(:ref, 
-                         Expr(:escape, A), 
+       map( i->Expr(:(=),
+                    Expr(:escape, Symbol(j,i)),
+                    Expr(:ref,
+                         Expr(:escape, A),
                          Expr(:call, :+, Expr(:escape,Symbol("baseindex_")), i))
                    ),1:eval(dim))...,
        Expr(:(=),
@@ -50,22 +50,22 @@ macro mref(prefix,vname)
   Expr(:escape, Symbol(prefix,vname))
 end
 
-#== 
+#==
 transforms
 simplex_P(P,3,i)
-to 
+to
 quote
   pi1 = P[i1]
   pi2 = P[i2]
   pi3 = P[i3]
 end
-==# 
+==#
 macro simplex_P(P,dim,j)
-  Expr(:block, 
-       map( i->Expr(:(=), 
-                    Expr(:escape, Symbol("p",j,i)), 
-                    Expr(:ref, 
-                         Expr(:escape, P), 
+  Expr(:block,
+       map( i->Expr(:(=),
+                    Expr(:escape, Symbol("p",j,i)),
+                    Expr(:ref,
+                         Expr(:escape, P),
                          Expr(:escape,Symbol(j,i)))
                    ),1:eval(dim))...)
 end
@@ -84,7 +84,7 @@ end
 
 macro ifenable( isenabled, jlti, body )
   if eval(isenabled)
-    :(if $(esc(jlti)) 
+    :(if $(esc(jlti))
         $(esc(body))
       end)
   else
@@ -111,13 +111,13 @@ end
 
 const ChildNode=Nullable{DAABBNode}
 
-DAABBNode(aabb::AABB{F}, data::T, parent::DAABBNode{T,F}, childleft::DAABBNode{T,F}, childright::DAABBNode{T,F}) where {T,F} = 
+DAABBNode(aabb::AABB{F}, data::T, parent::DAABBNode{T,F}, childleft::DAABBNode{T,F}, childright::DAABBNode{T,F}) where {T,F} =
 DAABBNode(aabb,data,parent,childleft,childright)
 
-DAABBNode(aabb::AABB{F}, data::T, parent::DAABBNode{T,F}) where {T,F} = 
+DAABBNode(aabb::AABB{F}, data::T, parent::DAABBNode{T,F}) where {T,F} =
 DAABBNode(aabb,data,parent,nothing,nothing)
 
-DAABBNode(aabb::AABB{F}, data::T) where {T,F} = 
+DAABBNode(aabb::AABB{F}, data::T) where {T,F} =
 DAABBNode(aabb,data,nothing,nothing,nothing)
 
 function getAABB(notree::EmptyTree)
@@ -125,7 +125,7 @@ function getAABB(notree::EmptyTree)
 end
 
 function getAABB(tree::DAABBNode{T,F}) where {T,F}
-  tree.aabb  
+  tree.aabb 
 end
 
 function getparent(kid::EmptyTree)
@@ -135,7 +135,7 @@ end
 function getparent(kid::DAABBNode{T,F}) where {T,F}
   if isnull(kid.parent)
     EmptyTree()
-  else 
+  else
     kid.parent
   end
 end
@@ -180,7 +180,7 @@ function insert( ancestor::DAABBNode{T,F}, aabb::AABB{F}, fataabb::AABB{F}, data
   if isleaf(ancestor)
     new_ancestor = DAABBNode(new_ancestor_aabb, zero(data))
     new_ancestor.parent = ancestor.parent
-    new_ancestor.left = ancestor 
+    new_ancestor.left = ancestor
     new_child = DAABBNode(aabb, data, new_ancestor)
     new_ancestor.right = new_child
     ancestor.parent = new_ancestor
@@ -191,17 +191,17 @@ function insert( ancestor::DAABBNode{T,F}, aabb::AABB{F}, fataabb::AABB{F}, data
 
     #assert( !isnull(ancestor.left) ) # we keep tree in this state. no null children.
     #assert( !isnull(ancestor.right) )
-    childL = ancestor.left 
-    childR = ancestor.right 
+    childL = ancestor.left
+    childR = ancestor.right
 
     volleft = volume(union(fataabb, childL.aabb))
     volright = volume(union(fataabb, childR.aabb))
 
     if volleft < volright
-      childL = insert(childL, aabb, fataabb, data) 
+      childL = insert(childL, aabb, fataabb, data)
       ancestor.left = childL
     else
-      childR = insert(childR, aabb, fataabb, data) 
+      childR = insert(childR, aabb, fataabb, data)
       ancestor.right = childR
     end
     ancestor
@@ -223,25 +223,25 @@ function refitup( root::EmptyTree, shapec::ST, slop::S ) where {ST,S}
   root
 end
 
-function refitup( ancestor::DAABBNode{T,F}, shapec::ST, slop::F ) where {T,F,ST} 
-  if isleaf(ancestor) 
-    ancestor.aabb = AABB( shapec, ancestor.data ) 
+function refitup( ancestor::DAABBNode{T,F}, shapec::ST, slop::F ) where {T,F,ST}
+  if isleaf(ancestor)
+    ancestor.aabb = AABB( shapec, ancestor.data )
     refitup( getparent(ancestor), shapec, slop )
   else
     #assert(!isnull(ancestor.left))
     #assert(!isnull(ancestor.right))
-    childL = ancestor.left 
-    childR = ancestor.right 
+    childL = ancestor.left
+    childR = ancestor.right
     laabb = childL.aabb
     raabb = childR.aabb
 
     if isleaf(childL)
-      laabb = AABB( shapec, childL.data ) 
+      laabb = AABB( shapec, childL.data )
       childL.aabb = laabb
       laabb = inflate( laabb, slop )
     end
     if isleaf(childR)
-      raabb = AABB( shapec, childR.data ) 
+      raabb = AABB( shapec, childR.data )
       childR.aabb = raabb
       raabb = inflate( raabb, slop )
     end
@@ -256,21 +256,21 @@ function remove( root::EmptyTree, parent::EmptyTree, kid::DAABBNode{T,F} ) where
 end
 
 function remove( root::EmptyTree, parent::DAABBNode{T,F}, kid::DAABBNode{T,F} ) where {T,F}
-  # pull sibling up to parents position   
+  # pull sibling up to parents position  
   brosis = getsibling(parent,kid)
   brosis.parent = nothing
   brosis
 end
 
 function remove( grandmapa::DAABBNode{T,F}, modad::DAABBNode{T,F}, kid::DAABBNode{T,F} ) where {T,F}
-  # pull sibling up to parents position, grandparent will now raise the little bastard   
+  # pull sibling up to parents position, grandparent will now raise the little bastard  
   brosis = getsibling(modad,kid)
   brosis.parent = grandmapa
 
   if grandmapa.left == modad
-    grandmapa.left = brosis 
+    grandmapa.left = brosis
   else
-    grandmapa.right = brosis 
+    grandmapa.right = brosis
   end
   grandmapa
 end
@@ -284,13 +284,13 @@ function remove( parent::DAABBNode{T,F}, kid::DAABBNode{T,F} ) where {T,F}
   remove( grandparent, parent, kid )
 end
 
-function remove( kid::DAABBNode{T,F} ) where {T,F} 
+function remove( kid::DAABBNode{T,F} ) where {T,F}
   parent = getparent(kid)
   grandparent = getparent(parent)
   remove( grandparent, parent, kid  )
 end
 
-function isleaf( child::DAABBNode{T,F} ) where {T,F} 
+function isleaf( child::DAABBNode{T,F} ) where {T,F}
   isnull(child.left) && isnull(child.right)
 end
 
@@ -309,14 +309,14 @@ function flattentree(root::DAABBNode{T,F}, nleaf::T) where {T,F}
     nodemap[leafcache[i]] = i
   end
 
-  id = nleaf + 1 
+  id = nleaf + 1
   cachebranch(node) = begin
     node.data = id
-    push!(branchcache,node) 
+    push!(branchcache,node)
     nodemap[node] = id
     id += 1
   end
-                       
+                      
   visit(root, identity, cachebranch)
   vcat(leafcache,branchcache)
 end
@@ -336,7 +336,7 @@ create a flat memory cached verion of the tree for quick queries
 """
 function cachetree( root::DAABBNode{T,F}, nleaf::T ) where {T,F}
   flattree = flattentree(root, nleaf)
-  TreeCache( create_aabbcache(flattree), 
+  TreeCache( create_aabbcache(flattree),
              nleaf,
              create_childcache(flattree))
 end
@@ -347,10 +347,10 @@ known bug: a single node tree will miss that hit
 """
 function query( rootid::T, aabb::AABB{F}, hits::Vector{T},
                       treecache::TreeCache{T,F} ) where {T,F}
-                     
+                    
   nleaf = treecache.nleaf
 
-  nschunk = 32 
+  nschunk = 32
   nscapacity = nschunk
   #!me should make a new type and use that... AutoVector
   nodestack = Vector{T}(undef,nscapacity)
@@ -379,7 +379,7 @@ function query( rootid::T, aabb::AABB{F}, hits::Vector{T},
             nscapacity *= 2
             nodestackprev = nodestack
             nodestack = Vector{T}(undef,nscapacity)
-            copy!(nodestack, 1, nodestackprev, 1, inodestack)
+            copyto!(nodestack, 1, nodestackprev, 1, inodestack)
           end
           inodestack += 1
           nodestack[inodestack] = childR
@@ -420,7 +420,7 @@ function query( root::DAABBNode{T,F}, aabb::AABB{F}, hits::Vector{T} ) where {T,
 end
 
 """
-return all aabb's in the tree the overlap the query 
+return all aabb's in the tree the overlap the query
 """
 function query( ancestor::DAABBNode{T,F}, aabb::AABB{F} ) where {T,F}
   hits = Vector{T}()
@@ -435,7 +435,7 @@ function visit( ancestor::DAABBNode{T,F}, leaffcn = show, branchfcn = identity )
   if isleaf(ancestor)
     leaffcn(ancestor)
   else
-    branchfcn(ancestor) 
+    branchfcn(ancestor)
     if !isnull(ancestor.left)
       visit( ancestor.left, leaffcn, branchfcn )
     end
@@ -445,11 +445,29 @@ function visit( ancestor::DAABBNode{T,F}, leaffcn = show, branchfcn = identity )
   end
 end
 
+"""
+visit nodes in depth first order
+general tree traversal with pre, post and inorder callback methods
+"""
+function visitdf( ancestor::DAABBNode{T,F}, pre, post = identity, inorder = identity ) where {T,F}
+  pre(ancestor)
+  if !isnull(ancestor.left)
+    visitdf( ancestor.left, pre, post, inorder )
+  end
+  inorder(ancestor)
+  if !isnull(ancestor.right)
+    visitdf( ancestor.right, pre, post, inorder )
+  end
+  post(ancestor)
+end
+
+
+
 function visitreduce( ancestor::DAABBNode{T,F}, leaffcn, leaf0, branchfcn = (a,x)->a, branch0 = 0 ) where {T,F}
   if isleaf(ancestor)
     leaf0 = leaffcn(leaf0,ancestor)
   else
-    branch0 = branchfcn(branch0,ancestor) 
+    branch0 = branchfcn(branch0,ancestor)
     if !isnull(ancestor.left)
       leaf0, branch0 = visitreduce( ancestor.left, leaffcn, leaf0, branchfcn, branch0 )
     end
@@ -460,14 +478,14 @@ function visitreduce( ancestor::DAABBNode{T,F}, leaffcn, leaf0, branchfcn = (a,x
   (leaf0,branch0)
 end
 
-function visitbfq( q::Vector{DAABBNode{T,F}}, 
+function visitbfq( q::Vector{DAABBNode{T,F}},
                         leaffcn::Function, branchfcn::Function ) where {T,F}
   if !isempty(q)
     ancestor::DAABBNode{T,F} = shift!(q)
     if isleaf(ancestor)
       leaffcn(ancestor)
     else
-      branchfcn(ancestor) 
+      branchfcn(ancestor)
       if !isnull(ancestor.left)
         push!(q,ancestor.left)
       end
@@ -483,7 +501,7 @@ end
 visit each node in breadfirst order
 """
 function visitbf( ancestor::DAABBNode{T,F}, leaffcn = show, branchfcn = identity ) where {T,F}
-  visitbfq( [ancestor], leaffcn, branchfcn ) 
+  visitbfq( [ancestor], leaffcn, branchfcn )
 end
 
 """
@@ -527,16 +545,16 @@ function verify( node::DAABBNode{T,F}, P::Vector{Point{F}}, tris::Vector{T} ) wh
     if !isnull(node.left)
       containment = containment && contains(node.aabb, node.left.aabb)
       if containment
-        containment = containment && verify( node.left, P, tris ) 
+        containment = containment && verify( node.left, P, tris )
       end
-      containment = containment && node.left.parent == node 
+      containment = containment && node.left.parent == node
     end
     if !isnull(node.right)
       containment = containment && contains(node.aabb, node.right.aabb)
       if containment
-        containment = containment && verify( node.right, P, tris ) 
+        containment = containment && verify( node.right, P, tris )
       end
-      containment = containment && node.right.parent == node 
+      containment = containment && node.right.parent == node
     end
   end
   containment
@@ -547,7 +565,7 @@ function createBVH( P::Vector{Point{F}}, tris::Vector{Tuple{T,T,T}}, sloppercent
   slop = reduce(max,reduce(max,P)-reduce(min,P))*sloppercent
   root = makeroot()
   for ((i1,i2,i3), i) in zip(tris, 1:length(tris))
-    root = insert(root, AABB( P[i1], P[i2], P[i3] ), i, slop) 
+    root = insert(root, AABB( P[i1], P[i2], P[i3] ), i, slop)
   end
   root
 end
@@ -556,7 +574,7 @@ function createBVH( P::Vector{Point{F}}, tris::Vector{T}, sloppercent::F=F(0.05)
   slop = reduce(max,reduce(max,P)-reduce(min,P))*sloppercent
   root = makeroot()
   for ((i1,i2,i3), i) in zip(partition(tris,3), 1:div(length(tris),3))
-    root = insert(root, AABB( P[i1], P[i2], P[i3] ), i, slop) 
+    root = insert(root, AABB( P[i1], P[i2], P[i3] ), i, slop)
   end
   root
 end
@@ -571,7 +589,7 @@ macro createBVH_nplex(P, simplices, dim, sloppercent)
     root = makeroot()
     for (@stup(i,$dim), i) in zip(partition($(esc(simplices)),$dim), 1:div(length($(esc(simplices))),$dim))
       @simplex_P($(esc(P)),$dim,i)
-      root = insert(root, AABB(@sargs("p",i,$dim)), i, slop) 
+      root = insert(root, AABB(@sargs("p",i,$dim)), i, slop)
     end
     root
   end
@@ -579,13 +597,13 @@ end
 
 
 function points(tris::Triangles{IntT,FloatT},i::IntT) where {IntT,FloatT}
-  ii = (i-1)*3; 
+  ii = (i-1)*3;
   @inbounds r = (tris.P[tris.indices[ii+1]],tris.P[tris.indices[ii+2]],tris.P[tris.indices[ii+3]]); r
 end
 
 AABB( shapec::ST, ishape::IntT ) where {IntT<:Integer,ST} = AABB( points(shapec, ishape)... )
 
-function updateBVH(node::DAABBNode{T,F}, 
+function updateBVH(node::DAABBNode{T,F},
                            shapec::ST, slop::F,
                            reinsert::Vector{DAABBNode{T,F}}) where {T,F,ST}
   #!me should compare with how box2d does it.  they do a very quick leaf only check.
@@ -594,11 +612,11 @@ function updateBVH(node::DAABBNode{T,F},
     parentAABB = getAABB(parent)
     currAABB = AABB(shapec, node.data)
     node.aabb = currAABB
-    if contains(parentAABB,currAABB) 
+    if contains(parentAABB,currAABB)
     else
       grandmapa = getparent(parent)
-      remove( grandmapa, parent, node ) 
-      refitup( grandmapa, shapec, slop ) 
+      remove( grandmapa, parent, node )
+      refitup( grandmapa, shapec, slop )
       #insert( root, currAABB, node.data, slop )
       push!(reinsert,node)
     end
@@ -628,10 +646,10 @@ function updateBVH( node::DAABBNode{T,F}, shapec::ST, sloppercent::F = F(0.05) )
   P = shapec.P
   slop = reduce(max,reduce(max,P)-reduce(min,P))*sloppercent
   reinsert = Vector{DAABBNode{T,F}}()
-  updateBVH( node, shapec, slop, reinsert ) 
+  updateBVH( node, shapec, slop, reinsert )
 
   root = getleft(fostergparent)
-  if (typeof(root) != EmptyTree) 
+  if (typeof(root) != EmptyTree)
     root.parent = nothing
   end
 
@@ -655,7 +673,7 @@ macro selfintersect( BVH, Pa, indsa, dima, Pquery, indsq, dimq, collidef, skipdu
       @simplex_indices($(esc(indsq)),$dimq,i)
       @simplex_P($(esc(Pquery)),$dimq,i)
 
-      elhits = Vector{typeof(rootid)}() 
+      elhits = Vector{typeof(rootid)}()
 
       query(rootid, AABB(@sargs("p",i,$dimq)), elhits, tc)
 
@@ -673,7 +691,7 @@ macro selfintersect( BVH, Pa, indsa, dima, Pquery, indsq, dimq, collidef, skipdu
             #println("check hit: ", (@sargs("p",j,$dima), @sargs("p",i,$dimq))) #!me
             hit = $(esc(collidef))(@sargs("p",j,$dima), @sargs("p",i,$dimq))
             if first(hit)
-              push!(hits[i],(j,i,hit)) 
+              push!(hits[i],(j,i,hit))
             end
           end
         end
@@ -702,7 +720,7 @@ macro selfintersects( BVH, Pa, indsa, dima, Pquery, indsq, dimq, collidef, skipd
       @simplex_indices($(esc(indsq)),$dimq,i)
       @simplex_P($(esc(Pquery)),$dimq,i)
 
-      elhits = Vector{typeof(rootid)}() 
+      elhits = Vector{typeof(rootid)}()
 
       #query(BVH, AABB(p1, p2, p3), elhits)
       query(rootid, AABB(@sargs("p",i,$dimq)), elhits, tc) #threads
@@ -717,12 +735,12 @@ macro selfintersects( BVH, Pa, indsa, dima, Pquery, indsq, dimq, collidef, skipd
           if isempty(intersect(@mref(i,"vertindices"),@mref(j,"vertindices")))
             @simplex_P($(esc(Pa)),$dima,j)
 
-            #hitfound = triangle_intersect(pi1,pi2,pi3, pj1, pj2, pj3,cfunc) #nothreads 
-            #hitfound = $(esc(collidef))(@sargs("p",i,$dimq),@sargs("p",j,$dima)) #threads 
-            hitfound = $(esc(collidef))(@sargs("p",j,$dima), @sargs("p",i,$dimq)) #threads 
+            #hitfound = triangle_intersect(pi1,pi2,pi3, pj1, pj2, pj3,cfunc) #nothreads
+            #hitfound = $(esc(collidef))(@sargs("p",i,$dimq),@sargs("p",j,$dima)) #threads
+            hitfound = $(esc(collidef))(@sargs("p",j,$dima), @sargs("p",i,$dimq)) #threads
             #println("test:", @sargs("p",i,$dimq),@sargs("p",j,$dima), hitfound)
             if first(hitfound)
-              hashit[i] = true 
+              hashit[i] = true
               #return true #nothreads
             end
           end
@@ -757,7 +775,7 @@ function selfintersectdumb( P::Vector{Point{F}}, tris::Vector{T}, trintersect::F
         p3j = P[j3]
         paabbj = AABB(p1j, p2j, p3j)
         if isempty(intersect(vertindices,(j1,j2,j3))) && overlaps(paabb,paabbj)
-          hitfound = trintersect(p1,p2,p3, p1j,p2j,p3j) 
+          hitfound = trintersect(p1,p2,p3, p1j,p2j,p3j)
           if first(hitfound)
             push!(hits,(i,j,hitfound))
           end
