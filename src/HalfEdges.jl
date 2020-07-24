@@ -1205,10 +1205,18 @@ function collide_self(collider::Collider, collidef::F = Collision.triangle_trian
   BVH.selfintersect(collider.bvh, collider.mesh, collidef)
 end
 
-function edgeshit((a,b,(_,((s,(v1,v2)), (t,(w1,w2))))), triP)
+function edgeshit2((a,b,(_,((s,(v1,v2)), (t,(w1,w2))))), triP)
     ab = (a,b)
     ((triP[ab[s]][v1], triP[ab[s]][v2]),
         (triP[ab[t]][w1], triP[ab[t]][w2]))
+end
+
+function edgeshit(hit::T, triP) where T<:Tuple{Int64,Int64,Tuple{Bool,Vector{Tuple{Int64,Tuple{Int64,Int64}}}}}
+  (a,b,(_,E)) = hit
+  ab = (a,b)
+  map(E) do (s,(v1,v2))
+    (triP[ab[s]][v1], triP[ab[s]][v2])
+  end
 end
 
 """
