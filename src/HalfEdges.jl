@@ -64,7 +64,8 @@ export
   winding_number,
   winding_numbers,
   winding_number_cache,
-  floodfill
+  floodfill,
+  find_islands
 
 include("Handles.jl")
 
@@ -537,11 +538,11 @@ end
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
 
 """
-    floodfill(topo, P)
+    floodfill(topo, P; verbose=true)
 
 flood fill values at vertices where intersecting triangles create barrier.
 """
-function floodfill(topo::Topology, P)
+function floodfill(topo::Topology, P; verbose=false)
   # find intersections
   hits = collide_self(topo, P)  
   edgehits = sort.(collide_self_edges(topo, P))
@@ -560,7 +561,7 @@ function floodfill(topo::Topology, P)
       IslandFind.union!(isls, (Int(vᵢ), Int(vrᵢ)))
     end
   end
-  find_islands(isls)
+  find_islands(isls, !verbose)
 end
 
 
@@ -1067,7 +1068,8 @@ boundary_interior(topo) = map(b->boundary_interior(topo, b), boundary_verts(topo
 # single airty versions
 
 for fn in (:next, :head, :tail, :prev, :opposite, :isboundary, :edge, :halfedge)
-  @eval $fn(h) = topo->$fn(topo, h)
+  @eval $fn(h::T) where T<:Handle = topo->$fn(topo, h)
+  @eval $fn(topo::Topology) = h->$fn(topo, h)
   @eval $fn(f::F) where {F<:Function} = (topo,h)->$fn(topo,f(topo,h))
 end
 
