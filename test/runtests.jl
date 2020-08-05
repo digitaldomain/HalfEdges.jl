@@ -299,5 +299,13 @@ end
   @test nfaces(topo) > 0
 end
 
+@testset "Collision" begin
+  o,x,y,z = Point(0.,0,0), Point(1.,0,0), Point(0.,1,0), Point(0.,0,1)
+  a,b = HalfEdges.Collision.segment_between(((o, x, y), 
+                                       (0.2x+0.2y-0.5z, 0.2x+0.2y+0.5z, 0.2x - 0.5y+0.5z)),
+                                       [(2, (1, 2)), (1, (1, 2))])
+  @test a[3] == b[3] == 0.0
+end
+
 include("BoundingVolumeTrees_runtests.jl")
 

@@ -4,7 +4,7 @@ Uses path compression. union! and find! are not threadsafe.
 """
 module IslandFind
 
-export Archipelago, union!, find!, find, islands, find_islands, group_sets, isorphan, reorder
+export Archipelago, union!, find!, find, islands, find_islands!, find_islands, group_sets, isorphan, reorder
 
 struct Node{T}
   parent::Int
@@ -150,7 +150,7 @@ function find_islands(connected::C,
   end
 end
 
-function find_islands(arp::Archipelago, group_by_entity=true)
+function find_islands!(arp::Archipelago, group_by_entity=true)
   archi = map(i->find!(arp, i), 1:length(arp.parent))
   if group_by_entity
     group_sets(archi)

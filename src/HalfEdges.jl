@@ -561,7 +561,7 @@ function floodfill(topo::Topology, P; verbose=false)
       IslandFind.union!(isls, (Int(vᵢ), Int(vrᵢ)))
     end
   end
-  find_islands(isls, !verbose)
+  find_islands!(isls, !verbose)
 end
 
 
