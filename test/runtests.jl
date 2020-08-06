@@ -299,7 +299,8 @@ end
   @test nfaces(topo) > 0
 end
 
-@testset "Collision" begin
+@testset ".Collision" begin
+  Point = SVector{3,Float64}
   o,x,y,z = Point(0.,0,0), Point(1.,0,0), Point(0.,1,0), Point(0.,0,1)
   a,b = HalfEdges.Collision.segment_between(((o, x, y), 
                                        (0.2x+0.2y-0.5z, 0.2x+0.2y+0.5z, 0.2x - 0.5y+0.5z)),
