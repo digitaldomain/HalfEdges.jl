@@ -360,7 +360,8 @@ nfaces(topo) = length(faces(topo))
 Topology( tris::Vector{Tuple{T,T,T}}, nVert::TT ) where {T<:Integer, TT<:Integer} = 
   Topology( map(t->(map(VertexHandle,t)...,),tris), nVert ) 
 
-function Topology( poly::Vector{Vector{T}}, nVert::T; handle_bad_geo = true ) where {T<:Integer}
+function Topology( poly::Vector{VT}, nVert; handle_bad_geo = true ) where {T<:Integer,
+                                                                           VT<:AbstractVector{T}}
   nFace = length(poly)
   nHEdge = sum( map(length,poly) ) 
   topo_v2he, topo_he = (Vector{HalfEdgeHandle}(undef,nVert), Vector{HalfEdge}(undef,nHEdge)) 
