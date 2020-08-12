@@ -6,6 +6,7 @@ using AbstractTrees
 using StaticArrays
 
 const Vector3{T} = SVector{3,T}
+using HalfEdges.BoundingVolumeTrees: contains
 
 @testset "traverse" begin
   t = Node(1, Node(-2, Node(-3),Node(3,Node(-4),nothing)), Node(2,nothing,Node(4)))

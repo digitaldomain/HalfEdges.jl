@@ -13,7 +13,6 @@ using Base.Iterators
 using LinearAlgebra
 import Base.union
 import Base.isless
-import Base.contains
 
 struct AABB{T}
   min::Vector3{T}
