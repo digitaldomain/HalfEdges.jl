@@ -78,6 +78,7 @@ end
   end
 
   @test length(collect(HalfEdges.OneRing(topo,VertexHandle(1)))) == 2
+  @test sort(OneRingVerts(topo,VertexHandle(1))) == [2, 3]
   @test length(collect(HalfEdges.OneRing(topo,VertexHandle(3)))) == 4
   @test length(collect(HalfEdges.OneRing(topo,VertexHandle(4)))) == 3
   ring3 = [HalfEdges.edge(topo,ih) for ih in HalfEdges.OneRing(topo,VertexHandle(3))]
@@ -291,6 +292,13 @@ end
   @test winding_number(topo, P, SVector{3}(-1.0,-1.0,-1.0)) |> round == 0
   @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5), cache) |> round == 1 
   @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5)) |> round == 1 
+
+  @test HalfEdges.isorphan(floodfill(topo, P;verbose=true), 1) == false
+  P[1] = SVector(3.0,3.0,3.0)
+  @test findall(isequal(1), floodfill(topo, P)[1]) |> isempty == true
+  @test findall(isequal(2), floodfill(topo, P)[1]) |> isempty == false
+  @test HalfEdges.isorphan(floodfill(topo, P;verbose=true), 1)
+
 end
 
 @testset "load a mesh" begin
@@ -306,6 +314,29 @@ end
                                        (0.2x+0.2y-0.5z, 0.2x+0.2y+0.5z, 0.2x - 0.5y+0.5z)),
                                        [(2, (1, 2)), (1, (1, 2))])
   @test a[3] == b[3] == 0.0
+  @test HalfEdges.Collision.triangle_edges(o, x, y, Point(0.2, 0.2, 1.0),
+                                              Point(0.2, 0.2, -1.0),
+                                              Point(0.1, 0.1, -1.0)) |> first == true
+  @test HalfEdges.Collision.triangle_edges(o, x, y, Point(0.2, 0.2, -0.1),
+                                              Point(0.2, 0.2, -1.0),
+                                              Point(0.1, 0.1, -1.0)) |> first == false
+end
+
+@testset "DifferentialGeometry" begin
+  topo, P = cube()
+
+  P = HalfEdges.poisson(HalfEdges.Δ(topo, P), zero.(P), P, [1,2,3,4])
+  # minimal surface on x-z plane
+  @test mapreduce(p->p[2], +, P) == 0.0
+  @test mapreduce(p->p[1], *, P[5:end]) > 0.0
+  @test mapreduce(p->p[1], *, P[5:end]) < 1.0
+
+end
+
+@testset "IslandFinder" begin
+  @test length(find_islands([[1,2],[3,4],[5,6],[7,8]])) == 4
+  @test length(find_islands([[1,2],[3,4],[5,6],[6,1]])) == 2
+  @test length(find_islands([[1,2],[3,4],[5,6],[6,1],[4,5]])) == 1
 end
 
 include("BoundingVolumeTrees_runtests.jl")

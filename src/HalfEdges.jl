@@ -1230,6 +1230,9 @@ collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh i
 function collide_self_edges(topo, collider::Collider)
   hits = collide_self(collider, Collision.triangle_edges)
   Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  if isempty(Fhit)
+    return []
+  end
   triP = Vector{Vector{VertexHandle}}(undef, reduce(max, Fhit))
   triP[Fhit] = map(iF->vertices(topo, FaceHandle(iF)), Fhit)
 
