@@ -1,7 +1,6 @@
 export
 AABB,
 overlaps,
-contains,
 inflate,
 volume,
 refit,

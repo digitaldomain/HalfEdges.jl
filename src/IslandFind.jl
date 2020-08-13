@@ -4,7 +4,7 @@ Uses path compression. union! and find! are not threadsafe.
 """
 module IslandFind
 
-export Archipelago, union!, find!, islands, find_islands, group_sets
+export Archipelago, union!, find!, find, islands, find_islands!, find_islands, group_sets, isorphan, reorder
 
 struct Node{T}
   parent::Int
@@ -34,7 +34,7 @@ end
 
 connect entities a and b in disjoint set data structure.
 """
-function union!(isls::Archipelago, (a,b)::Tuple{Int, Int} )
+function union!(isls::Archipelago, (a,b)::Tuple{T, T} ) where {T<:Integer}
   nab = max(a,b)
   if nab > length(isls.parent)
     resize(isls, nab)
@@ -60,12 +60,28 @@ function union!(isls::Archipelago, (a,b)::Tuple{Int, Int} )
   roota
 end
 
+function union!(arp::Archipelago, c::V) where {T<:Integer, V<:AbstractVector{T}}
+  for edge in zip(c[1:end-1], c[2:end])
+    union!(arp, edge)
+  end
+  arp
+end
+
+"""
+    isorphan(isls, id_a)
+
+   
+true if the entity represented by id_a is not connected to any other entity
+"""
+isorphan(isls::Archipelago, id_a) = isls.parent[id_a] == id_a && isls.rank[id_a] == 1 
+
 """
     find!(isls, id_a)
 
 the representative id for the disjoint set that id_a belogs to
+path compression optimization can mutate isls
 """
-function find!(isls::Archipelago, id::Int)
+function find!(isls::Archipelago, id::T) where {T<:Integer}
   node = id
   while true
     root = isls.parent[node]
@@ -73,6 +89,21 @@ function find!(isls::Archipelago, id::Int)
     node = root
   end
   isls.parent[id] = node
+end
+
+"""
+    find(isls, id_a)
+
+the representative id for the disjoint set that id_a belogs to
+"""
+function find(isls::Archipelago, id::T) where {T<:Integer}
+  node = id
+  while true
+    root = isls.parent[node]
+    root == node && break
+    node = root
+  end
+  node
 end
 
 """
@@ -115,16 +146,16 @@ function find_islands(connected::C,
   if group_by_entity
     group_sets(archi)
   else
-    archi
+    arp
   end
 end
 
-function find_islands(arp::Archipelago, group_by_entity=true)
+function find_islands!(arp::Archipelago, group_by_entity=true)
   archi = map(i->find!(arp, i), 1:length(arp.parent))
   if group_by_entity
     group_sets(archi)
   else
-    archi
+    arp
   end
 end
 
@@ -135,7 +166,14 @@ function group_sets(island_id::V) where {V<:Vector{Int}}
   for (i, isl) in enumerate(island_id)
     push!(isls[isl], i)
   end
-  filter(!isempty, isls)
+  #filter(!isempty, isls)
+  filter(c->!(isequal(1)∘length)(c) && !isempty(c), isls)
+end
+
+
+# single airity
+for fn in (:find!, :find, :union!, :isorphan)
+  @eval $fn(archi::Archipelago) = h->$fn(archi, h)
 end
 
 end

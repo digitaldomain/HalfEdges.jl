@@ -37,6 +37,7 @@ const join = ∧
 # orientation of a pseudoscalar element.
 import Base.sign
 sign(ps) = sign(real(tr(ps*𝐼)))
+volume(ps) = real(tr(ps*𝐼))*0.25
 
 """ 
     γpoint(x,y,z)
@@ -158,6 +159,71 @@ end
 
 function triangle_edges(a::P, b::P, c::P, d::P, e::P, f::P) where {P<:SVector}
   triangle_edges(γpoint(a), γpoint(b), γpoint(c), γpoint(d), γpoint(e), γpoint(f))
+end
+
+#==
+function tri_edge(a,b,c, v,w)
+  n = normalize((b-a)×(c-a))
+end
+==#
+
+function meet_tri_edge(a, b, c, v, w)
+  n = normalize((b-a)×(c-a))
+  l = w-v
+  l₀ = w
+  d = ((a-l₀)⋅n)/(l⋅n)
+  l₀ + l*d
+end
+
+function γmeet_tri_edge(a, b, c, v, w)
+  ga,gb,gc,gv,gw = γpoint.((a,b,c,v,w))
+
+  r = real(tr(ga*gb*gc*gw*𝐼))/real(tr(ga*gb*gc*gv*𝐼))
+  p = (w - r*v)/(1.0-r)
+end
+
+"""
+    segment_between(((a, b, c), (d, e, f)), [(itri, (v1, v2))])
+
+return the longest segment traced on the face of a triangle, between the edges.
+the indices are in the range [1,2,3] and refer to the triangle points
+itri is in the range [1,2] and refers to either triangle abc or def
+itri indicates the triangle the edge v1 and v2 refer to
+"""
+function segment_between(abc_def::T, edges) where {R<:Real, 
+                                                   P<:AbstractVector{R}, 
+                                                   T<:Tuple{Tuple{P,P,P}, 
+                                                            Tuple{P,P,P}}}
+  @assert length(edges) > 1
+
+  hitp = map(edges) do (s, (v1, v2))
+    meet_tri_edge(abc_def[(s&1)+1]..., abc_def[s][[v1,v2]]...)
+  end
+
+  if length(hitp) == 2
+    (hitp[2], hitp[1])
+  else
+    seg = (zero(typeof(hitp[1])), zero(typeof(hitp[1])))
+    best = LinearAlgebra.norm_sqr(p)
+    for i in 1:length(hitp)
+      for j in (i+1):length(hitp)
+        cand_seg = (hitp[j], hitp[i])
+        cand = LinearAlgebra.norm_sqr(cand_seg[2]-cand_seg[1])
+        if cand > best
+          best = cand
+          seg = cand_seg
+        end
+      end
+    end
+    seg
+  end
+end
+
+function segment_between(abc_def::T, edges) where {R<:Real, 
+                                                   P<:AbstractVector{R}, 
+                                                   T<:Tuple{AbstractVector{P}, 
+                                                            AbstractVector{P}}}
+  segment_between((Tuple(abc_def[1]), Tuple(abc_def[2])), edges)
 end
 
 end

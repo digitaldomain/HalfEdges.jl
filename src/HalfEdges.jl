@@ -64,7 +64,8 @@ export
   winding_number,
   winding_numbers,
   winding_number_cache,
-  floodfill
+  floodfill,
+  find_islands
 
 include("Handles.jl")
 
@@ -359,7 +360,8 @@ nfaces(topo) = length(faces(topo))
 Topology( tris::Vector{Tuple{T,T,T}}, nVert::TT ) where {T<:Integer, TT<:Integer} = 
   Topology( map(t->(map(VertexHandle,t)...,),tris), nVert ) 
 
-function Topology( poly::Vector{Vector{T}}, nVert::T; handle_bad_geo = true ) where {T<:Integer}
+function Topology( poly::Vector{VT}, nVert; handle_bad_geo = true ) where {T<:Integer,
+                                                                           VT<:AbstractVector{T}}
   nFace = length(poly)
   nHEdge = sum( map(length,poly) ) 
   topo_v2he, topo_he = (Vector{HalfEdgeHandle}(undef,nVert), Vector{HalfEdge}(undef,nHEdge)) 
@@ -537,11 +539,11 @@ end
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
 
 """
-    floodfill(topo, P)
+    floodfill(topo, P; verbose=true)
 
 flood fill values at vertices where intersecting triangles create barrier.
 """
-function floodfill(topo::Topology, P)
+function floodfill(topo::Topology, P; verbose=false)
   # find intersections
   hits = collide_self(topo, P)  
   edgehits = sort.(collide_self_edges(topo, P))
@@ -560,7 +562,7 @@ function floodfill(topo::Topology, P)
       IslandFind.union!(isls, (Int(vᵢ), Int(vrᵢ)))
     end
   end
-  find_islands(isls)
+  find_islands!(isls, !verbose)
 end
 
 
@@ -1067,7 +1069,8 @@ boundary_interior(topo) = map(b->boundary_interior(topo, b), boundary_verts(topo
 # single airty versions
 
 for fn in (:next, :head, :tail, :prev, :opposite, :isboundary, :edge, :halfedge)
-  @eval $fn(h) = topo->$fn(topo, h)
+  @eval $fn(h::T) where T<:Handle = topo->$fn(topo, h)
+  @eval $fn(topo::Topology) = h->$fn(topo, h)
   @eval $fn(f::F) where {F<:Function} = (topo,h)->$fn(topo,f(topo,h))
 end
 
@@ -1227,6 +1230,9 @@ collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh i
 function collide_self_edges(topo, collider::Collider)
   hits = collide_self(collider, Collision.triangle_edges)
   Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
+  if isempty(Fhit)
+    return []
+  end
   triP = Vector{Vector{VertexHandle}}(undef, reduce(max, Fhit))
   triP[Fhit] = map(iF->vertices(topo, FaceHandle(iF)), Fhit)
 
