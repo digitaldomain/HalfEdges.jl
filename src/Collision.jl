@@ -204,7 +204,7 @@ function segment_between(abc_def::T, edges) where {R<:Real,
     (hitp[2], hitp[1])
   else
     seg = (zero(typeof(hitp[1])), zero(typeof(hitp[1])))
-    best = LinearAlgebra.norm_sqr(p)
+    best = 0.0
     for i in 1:length(hitp)
       for j in (i+1):length(hitp)
         cand_seg = (hitp[j], hitp[i])
