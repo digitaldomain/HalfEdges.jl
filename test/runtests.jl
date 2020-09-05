@@ -185,6 +185,13 @@ end
   @test (halfedge |> next |> opposite |> next |> next |> opposite |> next |> head)(topo, (3,1)) == v6 
 end
 
+@testset "Degenerate" begin
+  topo = Topology([2,3,4])
+  P = map(i->rand(SVector{3,Float64}), 1:4)
+  @test first(vertexnormals(topo, P)) == zero(SVector{3,Float64})
+  @test isempty(floodfill(topo, P)) == false
+end
+
 @HandleType Foo
 @HandleType Bar
 @HandleType Baz
