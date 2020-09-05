@@ -296,7 +296,7 @@ OneRing(topo::Topology, vh::VertexHandle) = OneRing( HalfEdgeHandle(topo, vh), t
 """ iterate around the one-ring of the vert in cw direction """
 function Base.iterate(i::OneRing)
   heh = i.starth 
-  (heh,next(i.topo,opposite(i.topo,heh)))
+  iszero(heh) ? nothing : (heh,next(i.topo,opposite(i.topo,heh)))
 end
 
 Base.iterate(topo::Topology, h::T) where T =  iterate(OneRing(topo,h))
@@ -311,6 +311,8 @@ function Base.iterate(i::OneRing, heh::HalfEdgeHandle)
 end
 
 OneRingVerts(topo::Topology, h) = map(heh->head(topo, heh), OneRing(topo, h))
+
+Base.isempty(oring::OneRing) = iszero(oring.starth)
 
 """
   until( topo, he, v )
@@ -364,7 +366,7 @@ function Topology( poly::Vector{VT}, nVert; handle_bad_geo = true ) where {T<:In
                                                                            VT<:AbstractVector{T}}
   nFace = length(poly)
   nHEdge = sum( map(length,poly) ) 
-  topo_v2he, topo_he = (Vector{HalfEdgeHandle}(undef,nVert), Vector{HalfEdge}(undef,nHEdge)) 
+  topo_v2he, topo_he = (fill(HalfEdgeHandle(0),nVert), Vector{HalfEdge}(undef,nHEdge)) 
   topo_face2he = Vector{HalfEdgeHandle}(undef,nFace)
 
   edgemap = Dict{Tuple{VertexHandle, VertexHandle}, HalfEdgeHandle}()
@@ -784,7 +786,11 @@ normal of a vertex given it's OneRing
 """
 function vertexnormal( mesh, P, ring::OneRing, normal = weightednormal )
   iring = Iterators.filter(heh->!isboundary(mesh,heh),ring)
-  normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+  if isempty(iring)
+    zero(eltype(P))
+  else
+    normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+  end
 end
 
 """
