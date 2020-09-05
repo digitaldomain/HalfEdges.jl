@@ -540,6 +540,18 @@ end
 
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
 
+function triangle_edges_inflated(inflate, a, b, c, d, e, f)
+  inflateit(a,b,c) = begin
+    com = (a+b+c)*0.333333333333333333
+    a = a+(a-com)*(1.0+inflate)
+    b = b+(b-com)*(1.0+inflate)
+    c = c+(c-com)*(1.0+inflate)
+    (a,b,c)
+  end
+
+  Collision.triangle_edges(inflateit(a,b,c)..., inflateit(d,e,f)...)
+end
+
 """
     floodfill(topo, P; verbose=true)
 
@@ -548,7 +560,7 @@ flood fill values at vertices where intersecting triangles create barrier.
 function floodfill(topo::Topology, P; verbose=false)
   # find intersections
   hits = collide_self(topo, P)  
-  edgehits = sort.(collide_self_edges(topo, P))
+  edgehits = sort.(collide_self_edges(topo, P, partial(triangle_edges_inflated, 0.001)))
 
   blockers = Dict(map(ei->(ei,1), edgehits))
 
@@ -1233,8 +1245,8 @@ end
 
 collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh in collision with triangles of th e mesh.
 """
-function collide_self_edges(topo, collider::Collider)
-  hits = collide_self(collider, Collision.triangle_edges)
+function collide_self_edges(topo, collider::Collider, colfn = Collision.triangle_edges)
+  hits = collide_self(collider, colfn)
   Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
   if isempty(Fhit)
     return []
@@ -1245,7 +1257,7 @@ function collide_self_edges(topo, collider::Collider)
   map(hit->edgeshit(hit, triP), hits) |> Iterators.flatten |> collect
 end
 
-collide_self_edges(topo::Topology, P::Vector{T}) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P))
+collide_self_edges(topo::Topology, P::Vector{T}, colfn = Collision.triangle_edges) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P), colfn)
 """
     query_aabb(collider, aabb, hits)
 
