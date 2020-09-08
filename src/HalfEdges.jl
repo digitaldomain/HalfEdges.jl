@@ -296,7 +296,7 @@ OneRing(topo::Topology, vh::VertexHandle) = OneRing( HalfEdgeHandle(topo, vh), t
 """ iterate around the one-ring of the vert in cw direction """
 function Base.iterate(i::OneRing)
   heh = i.starth 
-  (heh,next(i.topo,opposite(i.topo,heh)))
+  iszero(heh) ? nothing : (heh,next(i.topo,opposite(i.topo,heh)))
 end
 
 Base.iterate(topo::Topology, h::T) where T =  iterate(OneRing(topo,h))
@@ -311,6 +311,8 @@ function Base.iterate(i::OneRing, heh::HalfEdgeHandle)
 end
 
 OneRingVerts(topo::Topology, h) = map(heh->head(topo, heh), OneRing(topo, h))
+
+Base.isempty(oring::OneRing) = iszero(oring.starth)
 
 """
   until( topo, he, v )
@@ -364,7 +366,7 @@ function Topology( poly::Vector{VT}, nVert; handle_bad_geo = true ) where {T<:In
                                                                            VT<:AbstractVector{T}}
   nFace = length(poly)
   nHEdge = sum( map(length,poly) ) 
-  topo_v2he, topo_he = (Vector{HalfEdgeHandle}(undef,nVert), Vector{HalfEdge}(undef,nHEdge)) 
+  topo_v2he, topo_he = (fill(HalfEdgeHandle(0),nVert), Vector{HalfEdge}(undef,nHEdge)) 
   topo_face2he = Vector{HalfEdgeHandle}(undef,nFace)
 
   edgemap = Dict{Tuple{VertexHandle, VertexHandle}, HalfEdgeHandle}()
@@ -538,15 +540,27 @@ end
 
 #enclose(topo, P, bf::Vector{FaceHandle}) = enclose(topo, P, ∂(halfedge, topo).(bf))
 
+function triangle_edges_inflated(inflate, a, b, c, d, e, f)
+  inflateit(a,b,c) = begin
+    com = (a+b+c)*0.333333333333333333
+    a = a+(a-com)*(1.0+inflate)
+    b = b+(b-com)*(1.0+inflate)
+    c = c+(c-com)*(1.0+inflate)
+    (a,b,c)
+  end
+
+  Collision.triangle_edges(inflateit(a,b,c)..., inflateit(d,e,f)...)
+end
+
 """
     floodfill(topo, P; verbose=true)
 
 flood fill values at vertices where intersecting triangles create barrier.
 """
-function floodfill(topo::Topology, P; verbose=false)
+function floodfill(topo::Topology, P; verbose=false, inflate_triangles=0.001)
   # find intersections
   hits = collide_self(topo, P)  
-  edgehits = sort.(collide_self_edges(topo, P))
+  edgehits = sort.(collide_self_edges(topo, P, partial(triangle_edges_inflated, inflate_triangles)))
 
   blockers = Dict(map(ei->(ei,1), edgehits))
 
@@ -784,7 +798,11 @@ normal of a vertex given it's OneRing
 """
 function vertexnormal( mesh, P, ring::OneRing, normal = weightednormal )
   iring = Iterators.filter(heh->!isboundary(mesh,heh),ring)
-  normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+  if isempty(iring)
+    zero(eltype(P))
+  else
+    normalize(mapreduce(heh->normal(mesh,P,heh),+,iring))
+  end
 end
 
 """
@@ -1227,8 +1245,8 @@ end
 
 collect all (VertexHandle, VertexHandle) tuples representing edges of the mesh in collision with triangles of th e mesh.
 """
-function collide_self_edges(topo, collider::Collider)
-  hits = collide_self(collider, Collision.triangle_edges)
+function collide_self_edges(topo, collider::Collider, colfn = Collision.triangle_edges)
+  hits = collide_self(collider, colfn)
   Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
   if isempty(Fhit)
     return []
@@ -1239,7 +1257,7 @@ function collide_self_edges(topo, collider::Collider)
   map(hit->edgeshit(hit, triP), hits) |> Iterators.flatten |> collect
 end
 
-collide_self_edges(topo::Topology, P::Vector{T}) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P))
+collide_self_edges(topo::Topology, P::Vector{T}, colfn = Collision.triangle_edges) where T<:AbstractVector = collide_self_edges(topo, Collider(topo, P), colfn)
 """
     query_aabb(collider, aabb, hits)
 

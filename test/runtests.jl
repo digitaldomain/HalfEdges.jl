@@ -185,6 +185,13 @@ end
   @test (halfedge |> next |> opposite |> next |> next |> opposite |> next |> head)(topo, (3,1)) == v6 
 end
 
+@testset "Degenerate" begin
+  topo = Topology([2,3,4])
+  P = map(i->rand(SVector{3,Float64}), 1:4)
+  @test first(vertexnormals(topo, P)) == zero(SVector{3,Float64})
+  @test isempty(floodfill(topo, P)) == false
+end
+
 @HandleType Foo
 @HandleType Bar
 @HandleType Baz
@@ -294,11 +301,10 @@ end
   @test winding_number(topo, P, SVector{3}(0.1,0.2,0.5)) |> round == 1 
 
   @test HalfEdges.isorphan(floodfill(topo, P;verbose=true), 1) == false
-  P[1] = SVector(3.0,3.0,3.0)
-  @test findall(isequal(1), floodfill(topo, P)[1]) |> isempty == true
-  @test findall(isequal(2), floodfill(topo, P)[1]) |> isempty == false
-  @test HalfEdges.isorphan(floodfill(topo, P;verbose=true), 1)
-
+  @test floodfill(topo, P) |> length == 1
+  topo = Topology(vcat(polygons(topo), [[9, 10, 11]]))
+  P = vcat(P, [SVector(0.5,3.0,-0.5), SVector(0.5,-1.0,3.5), SVector(0.5,-1.0,-1.0)])
+  @test floodfill(topo, P) |> length == 3
 end
 
 @testset "load a mesh" begin
