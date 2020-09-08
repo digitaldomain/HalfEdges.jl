@@ -557,10 +557,10 @@ end
 
 flood fill values at vertices where intersecting triangles create barrier.
 """
-function floodfill(topo::Topology, P; verbose=false)
+function floodfill(topo::Topology, P; verbose=false, inflate_triangles=0.001)
   # find intersections
   hits = collide_self(topo, P)  
-  edgehits = sort.(collide_self_edges(topo, P, partial(triangle_edges_inflated, 0.001)))
+  edgehits = sort.(collide_self_edges(topo, P, partial(triangle_edges_inflated, inflate_triangles)))
 
   blockers = Dict(map(ei->(ei,1), edgehits))
 
