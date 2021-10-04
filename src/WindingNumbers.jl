@@ -19,6 +19,33 @@ function solid_angle(topo::Topology, P::TA, h::HalfEdgeHandle, p::T) where {T, T
   2.0*atan(det33(a,b,c), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb)
 end
 
+function solid_angle_normal(topo::Topology, P::TA, h::HalfEdgeHandle, p::T) where {T, TA<:Vector{T}}
+  if isboundary(topo, h) 
+    return 0.0
+  end
+
+  @inbounds a = P[head(topo, h)] - p
+  @inbounds b = P[head(topo, next(topo, h))] - p
+  @inbounds c = P[head(topo, next(topo, next(topo, h)))] - p
+  aa = norm(a); bb = norm(b); cc = norm(c)
+  Ω = 2.0*atan(det33(a,b,c), aa*bb*cc + a⋅b*cc + b⋅c*aa + c⋅a*bb)
+
+
+  if isapprox(Ω, 0.0, atol=1e-16)
+    zero(T) 
+  else
+    w = LinearAlgebra.norm(a+b+c)/3.0
+    centroidn = normalize((normalize(a) + normalize(b) + normalize(c)))
+    centroidn*Ω*w
+  end
+end
+
+function winding_normal(topo::Topology, P, q::VT) where {T<:Number, 
+                                                         VT<:AbstractVector{T}}
+  mapreduce(i->solid_angle_normal(topo, P, i, q), +, faces(topo))/(4.0π)
+end
+
+
 #=== some tensor stuff ===#
 # need this to make approximate winding numbers managable
 # works pretty seamlessly with julia's multidimensional arrays. 

@@ -45,6 +45,8 @@ export
   nfaces,
   nhalfedges,
   facelist,
+  polygons,
+  eff,
   incidence,
   loadmesh,
   head,
@@ -56,7 +58,6 @@ export
   boundary_interior,
   vertexnormals,
   normals,
-  polygons,
   face,
   halfedge,
   vertices,
@@ -65,7 +66,22 @@ export
   winding_numbers,
   winding_number_cache,
   floodfill,
-  find_islands
+  find_islands,
+  dihedral_angle,
+  edge,
+  add_ring,
+  remove_ring,
+  gluing_map,
+  edge_length_map,
+  opposite_corner_angle,
+  next_side,
+  other_side,
+  diagonal_length,
+  is_delaunay,
+  flip_edge!,
+  intrinsic_Δ,
+  intrinsic_M,
+  edge_in_face_basis
 
 include("Handles.jl")
 
@@ -193,6 +209,7 @@ end
 struct Polygon
   topo::Topology
   starth::HalfEdgeHandle
+  Polygon(topo::Topology, heh::HalfEdgeHandle) = new(topo, heh)
 end
 
 Base.IteratorSize(::Type{Polygon}) = Base.SizeUnknown()
@@ -476,6 +493,12 @@ area(topo::Topology, P, fh::FaceHandle) = area(P, edges(topo, fh)...)
 area(topo::Topology, P, heh::HalfEdgeHandle) = area(P, edges(topo, heh)...) 
 area(topo::Topology, P, poly::Polygon) = area(topo, P, poly.starth)
 
+""" area from 3 edge lengths. Heron's formula """
+function area( a::T, b::T, c::T ) where T<:Number
+  s = (a+b+c)/2
+  sqrt(s*(s-a)*(s-b)*(s-c))
+end
+
 function circumcenter_triangle(a::T,b::T,c::T) where T
   ac = c-a
   ab = b-a
@@ -559,16 +582,16 @@ flood fill values at vertices where intersecting triangles create barrier.
 """
 function floodfill(topo::Topology, P; verbose=false, inflate_triangles=0.001)
   # find intersections
-  hits = collide_self(topo, P)  
+  hits = collide_self(topo, P);
   edgehits = sort.(collide_self_edges(topo, P, partial(triangle_edges_inflated, inflate_triangles)))
 
-  blockers = Dict(map(ei->(ei,1), edgehits))
+  blockers = Dict(map(ei->(ei,1), edgehits));
 
-  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)))
-  Vhit = (unique∘sort∘collect∘Iterators.flatten)(map(iF->vertices(topo, FaceHandle(iF)), Fhit))
+  Fhit = (unique∘sort)(vcat( map(x->x[1],hits), map(x->x[2],hits)));
+  Vhit = (unique∘sort∘collect∘Iterators.flatten)(map(iF->vertices(topo, FaceHandle(iF)), Fhit));
   
-  V = Vhit
-  isls = Archipelago(length(P))
+  V = Vhit;
+  isls = Archipelago(length(P));
 
   for vᵢ ∈ (VertexHandle(i) for i in 1:length(P))
     vring = OneRingVerts(topo, VertexHandle(vᵢ))
@@ -586,6 +609,13 @@ end
 extract polygons as arrays of vertex indices 
 """
 polygons(topo) = map(f->vertices(topo,Polygon(topo,f)), (faces(topo)))
+
+"""
+  eff(topo)
+
+the nfacesx3 matrix F
+"""
+eff(topo) = reduce(vcat, polygons(topo)')
 
 minussigned( ::Val{false} ) = 1.0
 minussigned( ::Val{true} ) = -1.0
@@ -848,6 +878,11 @@ function angle(topo, P, h::HalfEdgeHandle)
   acos(normalize(b-a)⋅normalize(c-a))
 end
 
+
+function is_delaunay(topo::Topology, P, heh::HalfEdgeHandle)
+  angle(topo, P, heh) + angle(topo, P, opposite(topo, heh)) <= π + 1e-5
+end
+
 """
     orientation( (a,b,c), (u,v) )
 
@@ -893,7 +928,7 @@ function improve_mesh(topo::Topology, P) #; smoothness=0.0)
 
   for heᵢ in halfedges(topo)
     if ismissing(he2face[heᵢ])
-      for hpᵢ in Polygon(topo, heᵢ)
+      for hpᵢ in Polygon(topo, HalfEdgeHandle(heᵢ))
         if !ismissing(he2face[hpᵢ])
           he2face[heᵢ] = he2face[hpᵢ]
           break;
@@ -917,7 +952,7 @@ function improve_mesh(topo::Topology, P) #; smoothness=0.0)
       continue
     end
 
-    if isboundary(topo, oheᵢ) || length(Polygon(topo, he2face[oheᵢ])|>collect) != 3
+    if isboundary(topo, oheᵢ) || length(Polygon(topo, FaceHandle(he2face[oheᵢ]))|>collect) != 3
       skipβ = true
     else
       β = angle(topo, P, oheᵢ)
@@ -925,7 +960,7 @@ function improve_mesh(topo::Topology, P) #; smoothness=0.0)
       heflip = oheᵢ
       bscale = 0.5
     end
-    if isboundary(topo, heᵢ) || length(Polygon(topo, he2face[heᵢ])|>collect) != 3
+    if isboundary(topo, heᵢ) || length(Polygon(topo, FaceHandle(he2face[heᵢ]))|>collect) != 3
       skipα = true
     else
       α = angle(topo, P, heᵢ)
@@ -1168,6 +1203,63 @@ function loadmesh(filename::AbstractString)
   end
 end
 
+#==========  Mesh Editing ==========#
+#
+""" ordered list of all vertex indices referenced by faces """
+vertex_indices(F) = (unique∘sort)(reduce(vcat, F))
+vertex_indices(topo::Topology) = vertex_indices(polygons(topo)) 
+
+"""
+make an array to remap from vertex indices used by F to simple ordinal list of smallest size
+
+julia> remapV([[2,3,5],[5,7,2]], 8)
+8-element Array{Int64,1}:
+0
+1
+2
+0
+3
+0
+4
+0
+
+"""
+function remapV(F, nP)
+  VF = vertex_indices(F)
+  toFsub = zeros(Int64,nP)
+  toFsub[VF] = collect(1:length(VF))
+  toFsub
+end
+ 
+remapV(topo::Topology) = remapV(polygons(topo), nverts(topo)) 
+
+"""
+  add_ring(topo, C)
+
+the collection C and all the vertices directly connected to any vertex in the collection C
+"""
+function add_ring(topo::Topology, H::Vector{HalfEdgeHandle})
+  reduce(vcat, 
+         (let 
+            tl = tail(topo, heh)
+            vcat(tl, OneRingVerts(topo, tl))
+          end
+          for heh ∈ H)) |> sort |> unique |> V->map(vᵢ->opposite(topo, halfedge(topo, vᵢ)), V)
+end
+
+
+add_ring(topo::Topology, V::Vector{VertexHandle}) = vertex.([topo], add_ring(topo, halfedge.([topo], V)))
+
+function remove_ring(topo::Topology, V::Vector{VertexHandle})
+  ismember = fill(false, nverts(topo))
+  ismember[V] .= true
+
+  filter(V) do vᵢ
+    oring = OneRing(topo, vᵢ)
+    reduce((a,b)->a && ismember[head(topo,b)], oring; init=true)
+  end
+end
+
 #==========  Collision Detection ============#
 
 include("BoundingVolumeTrees.jl")
@@ -1277,11 +1369,279 @@ end
 
 update the collision detection structures in collider to reflect any change in mesh positions
 """
-update_collider( collider::C ) where C<:Collider = BVH.updateBVH(collider.bvh, collider.mesh)
+update_collider(collider::C) where C<:Collider = BVH.updateBVH(collider.bvh, collider.mesh)
+
+""" face to edge lengths. for intrinsic triangulations """
+function edge_length_map(topo::Topology, P)
+  reduce(vcat, 
+         map(faces(topo)) do heha
+           hehb = next(topo, heha)
+           hehc = next(topo, hehb)
+           map( norm, [P[head(topo, heha)]-P[head(topo, hehc)],
+                       P[head(topo, hehb)]-P[head(topo, heha)],
+                       P[head(topo, hehc)]-P[head(topo, hehb)]]' )
+         end)
+end
+
+"""
+  the gluing map for intrinsic triangulations.
+  currently happening largely outside of HalfEdges data structures. It's mostly a quick and dirty 
+  port of https://github.com/nmwsharp/intrinsic-triangulations-tutorial/blob/master/tutorial_completed.py
+"""
+function gluing_map(topo::Topology)
+  FaceEdgeOrNo = Union{Tuple{FaceHandle, Int64}, Nothing}
+  G = Array{FaceEdgeOrNo, 2}(nothing, nfaces(topo), 3) 
+  map(enumerate(faces(topo))) do (i,heha)
+    hehb = next(topo, heha)
+    hehc = next(topo, hehb)
+    polyo = heh-> let 
+      faceo = face(topo, opposite(topo, heh))
+      if isnothing(faceo)
+        nothing
+      else
+        (faceo, 
+         indexin(opposite(topo, heh), collect(Polygon(topo, faceo)))[1])
+      end
+    end
+    
+    G[i,:] = [polyo(heha), polyo(hehb), polyo(hehc)]
+  end
+  G
+end
+
+next_side(fs::Nothing) = fs
+next_side(fs::Tuple{T, Int64}) where T<:Union{FaceHandle, Int64} = (fs[1], (fs[2]%3)+1)
+other_side(G, fs::Nothing) = fs
+other_side(G, fs) = G[fs...]
+
+""" angle given 3 edge lengths a,b,c opposite to a """
+function opposite_corner_angle(a::T, b::T, c::T) where T<:Number
+  acos((b^2 + c^2 - a^2)/(2*b*c))
+end
+
+opposite_corner_angle(l::T, fs::Nothing) where T<:Array = nothing
+
+function opposite_corner_angle(l::T, fs) where T<:Array
+  a = l[fs...]
+  b = l[next_side(fs)...]
+  c = l[next_side(next_side(fs))...]
+  opposite_corner_angle(a, b, c)
+end
+
+"""
+    Computes the length of the opposite diagonal of the diamond formed by the
+    triangle containing fs, and the neighboring triangle adjacent to fs.
+    This is the new edge length needed when flipping the edge fs.
+    :param G: |F|x3x2 gluing map
+    :param l: |F|x3 array of face-side edge lengths
+    :param fs: A face-side (f,s)
+    :returns: The diagonal length
+"""
+function diagonal_length(G, l, fs)
+  # /  |  \
+  # \ fs  / op
+  #  u | u
+  #   \|/
+  fs_opp = other_side(G, fs)
+  u = l[next_side(next_side(fs))...]
+  v = l[next_side(fs_opp)...]
+  theta_A = opposite_corner_angle(l, next_side(fs))
+  theta_B = opposite_corner_angle(l, next_side(next_side((fs_opp))))
+
+  # Law of cosines
+  sqrt(u^2 + v^2 - 2 * u * v * cos(theta_A + theta_B))
+end
+
+function is_delaunay(G, l, fs::Tuple{T, Int64}) where T<:Union{FaceHandle, Int64}
+  fs_opp = other_side(G, fs)
+
+  A = opposite_corner_angle(l, fs)
+  B = opposite_corner_angle(l, fs_opp)
+  A+B <= π + 1e-5
+end
+
+halfedge(topo::Topology, fs::Tuple{T, Int64}) where T<:Union{FaceHandle, Int64} = 
+  collect(Polygon(topo, FaceHandle(fs[1])))[fs[2]]
+
+"""
+  Glues together the two specified face sides.  
+  The gluing map G is updated in-place.
+  :param G: |F|x3x2 gluing map
+  :param fs1: a face-side (f1,s1)
+  :param fs2: another face-side (f2,s2)
+"""
+function glue_together!(G, fs1, fs2)
+    G[fs1...] = fs2
+    G[fs2...] = fs1
+end
+
+"""
+  Performs an intrinsic edge flip on the edge given by face-side s0. The
+  arrays F, G, and l are updated in-place.
+  This routine _does not_ check if the edge is flippable. Conveniently, in
+  the particular case of flipping to Delaunay, non-Delaunay edges can always
+  be flipped.
+  :param F: |F|x3 face list. ==>  polygons(topo).
+  :param G: |F|x3x2 gluing map G
+  :param l: |F|x3 edge-lengths array, giving the length of each face-side
+  :param s0: A face-side of the edge that we want to flip
+  :returns: The new identity of the side fs_a
+"""
+function flip_edge!(F, G, l, s0)
+  # Get the neighboring face-side
+    s1 = other_side(G, s0)
+
+    # Get the 3 sides of each face
+    s2, s3 = next_side(s0), next_side(next_side(s0))
+    s4, s5 = next_side(s1), next_side(next_side(s1))
+
+    # Get the sides glued to each edge of the diamond
+    s6, s7, s8, s9 = other_side(G,s2), other_side(G,s3), other_side(G,s4), other_side(G,s5)
+
+    # Get vertex indices for the vertices of the diamond
+    #!me slight difference, seems I constructed different convention to ref vertices
+    #!me in my convention the vertex v1 is the vertex at the head of the edge point at v1 
+    #!me the entry in the length table and elsewhere should reflect this
+    v0, v1, v2, v3 = F[s0...], F[s2...], F[s3...], F[s4...]
+
+    # Get the two faces from our face-sides
+    f0, f1 = s0[1], s1[1]
+
+    # Get the original lengths of the outside edges of the diamond
+    l2, l3, l4, l5 = l[s2...], l[s3...], l[s4...], l[s5...]
+
+    # Compute the length of the new edge
+    new_length = diagonal_length(G, l, s0)
+
+    # Update the adjacency list F
+    F[f0,:] = [v1, v2, v3]
+    F[f1,:] = [v3, v0, v1]
+
+    # Re-label elements.
+    # Usually this does nothing, but in a Delta-complex one of the neighbors of
+    # these faces might be one of the faces themselves! In that case, this
+    # re-labels the neighbors according to the updated labels after the edge flip.
+    relabel = s -> let
+        # NOTE: these variables (s2, f0, etc) are automatically accessed from the outer scope
+        # in Python; in other languages we could add them as additional arguments.
+        if s == s2 return (f1, 3) end
+        if s == s3 return (f0, 2) end
+        if s == s4 return (f0, 3) end
+        if s == s5 return (f1, 2) end
+        s 
+      end
+    s6, s7, s8, s9 = relabel(s6), relabel(s7), relabel(s8), relabel(s9)
+
+    # Update the gluing map G
+    glue_together!(G, (f0, 1), (f1, 1))
+    glue_together!(G, (f0, 2), s7)
+    glue_together!(G, (f0, 3), s8)
+    glue_together!(G, (f1, 2), s9)
+    glue_together!(G, (f1, 3), s6)
+
+    # Update the edge lengths
+    # Note that even the edges we didn't flip have been re-labeled, so we need to
+    # update those too.
+    l[f0,:] = [new_length, l3, l4]
+    l[f1,:] = [new_length, l5, l2]
+
+    (f0, 1)
+end
 
 include("WindingNumbers.jl")
 include("DifferentialGeometry.jl")
 
 using .DifferentialGeometry
 DifferentialGeometry.Δ( topo::Topology, P ) = DifferentialGeometry.Δ(polygons(topo) |> Iterators.flatten |> collect, P) 
+
+"""
+    intrinsic_Δ(F, l)
+
+Laplace-Beltrami operator built from list of triangle indices as matrix and |F|x3 edge length matrix.
+Positions are not used, so this is compatible with intrinsic triangulations.
+
+"""
+function intrinsic_Δ(F::Array{T,2}, l::Array{FT,2}) where {T<:Integer, FT<:Real}
+  n = size(F)[1]*9
+  indexI = Vector{Int}(undef,n)
+  indexJ = Vector{Int}(undef,n)
+  element = Vector{FT}(undef,n)
+  s = 1
+  @inbounds for (f, ijk) in enumerate(eachrow(F))
+    i,j,k = ijk
+
+    b = cot(opposite_corner_angle(l, (f, 1)))*0.5
+    c = cot(opposite_corner_angle(l, (f, 2)))*0.5
+    a = cot(opposite_corner_angle(l, (f, 3)))*0.5
+
+    #L[i,i] += b+c
+    indexI[s] = i; indexJ[s] = i; element[s] = b+c; s+=1
+    #L[i,j] -= c
+    indexI[s] = i; indexJ[s] = j; element[s] = -c; s+=1
+    #L[i,k] -= b
+    indexI[s] = i; indexJ[s] = k; element[s] = -b; s+=1
+    #L[j,i] -= c
+    indexI[s] = j; indexJ[s] = i; element[s] = -c; s+=1
+    #L[j,j] += c+a
+    indexI[s] = j; indexJ[s] = j; element[s] = c+a; s+=1
+    #L[j,k] -= a
+    indexI[s] = j; indexJ[s] = k; element[s] = -a; s+=1
+    #L[k,i] -= b
+    indexI[s] = k; indexJ[s] = i; element[s] = -b; s+=1
+    #L[k,j] -= a
+    indexI[s] = k; indexJ[s] = j; element[s] = -a; s+=1
+    #L[k,k] += a+b
+    indexI[s] = k; indexJ[s] = k; element[s] = a+b; s+=1
+  end
+  sparse(indexI, indexJ, element)
+end
+
+"""
+    intrinsic_M(F, l)
+
+Lumped mass matrix for intrinsic triangulations
+"""
+
+function intrinsic_M(F::Array{T,2}, l::Array{FT,2}) where {T<:Integer, FT<:Real}
+  M = zeros(reduce(max, F; init=0))
+  map(enumerate(eachrow(F))) do (f,ijk) 
+    a = area(l[f,:]...)/3.0 
+    M[ijk] += [a,a,a]
+  end
+  Diagonal(M)
+end
+
+"""
+    edge_in_face_basis(l, fs)
+
+compute an edge vector in a 2D basis for an intrinsic triangle
+l is a |F|x3 array of edge lengths per triangle
+fs is a (face, side) tuple.
+origin at tail of side 1, which is vertex 3
+"""
+function edge_in_face_basis(l, (f,s))
+  θ = opposite_corner_angle(l, (f, 2))
+  local_vert_positions = [[0.0,0], [l[f,1], 0], [cos(θ)*l[f,3], sin(θ)*l[f,3]]]
+
+  sa = s==1 ? 3 : s-1
+  local_vert_positions[s]-local_vert_positions[sa]
+end
+
+#==
+"""
+    
+"""
+function edgecentric_basis(l, f)
+  l₃₁, l₁₂, l₂₃ = l[f,:] 
+  sᵢ = sqrt( l₃₁^2+l₁₂^2-l₂₃^2)*√2
+  sⱼ = sqrt(-l₃₁^2+l₁₂^2+l₂₃^2)*√2
+  sₖ = sqrt( l₃₁^2-l₁₂^2+l₂₃^2)*√2
+  Diagonal([sᵢ,sⱼ,sₖ])
+end
+
+function edgecentric_to_barycentric(l, f, v, s::Diagonal{Float64})
+  v .* inv(s) 
+end
+==#
+
 end # module

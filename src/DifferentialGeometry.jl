@@ -54,7 +54,6 @@ end
 
 Δ( F::Vector{IT}, P ) where {IT<:Integer} = Δ(Iterators.partition( F, 3 ) |> collect, P)
 
-
 """
     constrain( L, pin )
 
