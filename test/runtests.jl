@@ -40,7 +40,7 @@ he_ = HalfEdges
   @test he_.vertex_indices(topo) == 1:nverts(topo)
   @test he_.face_indices(topo) == 1:nfaces(topo)
   @test sort(vertices(topo, HalfEdgeHandle(1))) == sort(vertices(topo, FaceHandle(1)))
-  @test length(halfedges(Polygon(topo, 1))) == 3
+  @test length(halfedges(Polygon(topo, FaceHandle(1)))) == 3
   @test eltype(OneRing(topo,VertexHandle(1))) == HalfEdgeHandle
   @test HalfEdges.verts(topo) == vertices(topo)
   @test HalfEdges.edge_indices(topo) == 1:nedges(topo)
@@ -55,7 +55,7 @@ he_ = HalfEdges
   @test he_.normals(topo, P) == [[0.0,0.0,1.0]]
   @test facelist(topo) == [[1,2,3]]
   @test edge(topo, EdgeHandle(1)) == (1,2)
-  @test sort(he_.angles(topo, P, Polygon(topo, 1))) ≈ [π/4, π/4, π/2]
+  @test sort(he_.angles(topo, P, Polygon(topo, FaceHandle(1)))) ≈ [π/4, π/4, π/2]
 
   # HalfEdgeHandle for vertex 3 is the most counterclockwise handle with 3 as it's tail
   @test isboundary(topo, vertices(topo)[3])
