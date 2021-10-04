@@ -3,7 +3,7 @@ Collision detection
 """
 module Collision
 
-export triangle_triangle, triangle_line, triangle_plane, plane_segement, triangle_edges, γpoint
+export triangle_triangle, triangle_line, triangle_plane, plane_segment, triangle_edges, γpoint
 
 using StaticArrays, SparseArrays, LinearAlgebra, Base.Iterators, IterTools
 
@@ -55,6 +55,7 @@ function triangle_line((a,b,c)::Tuple{P,P,P}, (d,e)::Tuple{P,P}) where P <: Proj
 
   # line passes through inside of triangle if line-crossing volumes are all same orientation
   # if product is zero then we are coplanar or exactly on an edge 
+  #!me can give false positive for miss where endpoint of segment is coplanar
   sum(crossings)^2 == 9.0 || prod(crossings) == 0.0
 end
 
