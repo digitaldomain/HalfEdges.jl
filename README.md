@@ -1,4 +1,3 @@
-[![Build Status](https://travis-ci.com/digitaldomain/HalfEdges.jl.svg?branch=master)](https://travis-ci.com/digitaldomain/HalfEdges.jl)
 [![codecov.io](https://codecov.io/github/digitaldomain/HalfEdges.jl/coverage.svg?branch=master)](https://codecov.io/github/digitaldomain/HalfEdges.jl?branch=master)
 
 # HalfEdges
