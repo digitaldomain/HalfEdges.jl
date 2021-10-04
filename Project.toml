@@ -1,7 +1,7 @@
 name = "HalfEdges"
 uuid = "b1055ec2-7fd2-11e8-0664-e1e21354bdb9"
 authors = ["Michael Alexander Ewert <mewert@d2.com>"]
-version = "0.2.3"
+version = "0.2.4"
 
 [deps]
 AbstractTrees = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
